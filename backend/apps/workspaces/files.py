@@ -58,6 +58,7 @@ def git_status(workspace):
         # Fallback dev : git sur l'hôte (le bind-mount est partagé)
         import subprocess
 
+        ensure_workspace_dir(workspace)
         r = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=workspace.host_path,

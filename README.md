@@ -93,6 +93,19 @@ daphne -b 0.0.0.0 -p 8000 config.asgi:application
 > En dev mono-process, on peut garder `USE_IN_MEMORY_CHANNEL=true` et
 > `USE_SQLITE=true` (retombée automatique sans Redis).
 
+## Tests
+
+Suite pytest (avec `pytest-django`), utilisant SQLite + channel layer mémoire +
+Celery eager (aucun service externe requis) :
+
+```bash
+cd backend && pytest          # ou : make test
+```
+
+La suite couvre l'auth, les organisations/RBAC, les workspaces, les sessions,
+la boucle agent (tool calls, reprise, approbations), l'orchestration Redis
+(via `fakeredis`), les tâches Celery et le client Ollama (mock HTTP).
+
 ## Licence
 
 MIT — voir [`LICENSE`](LICENSE).

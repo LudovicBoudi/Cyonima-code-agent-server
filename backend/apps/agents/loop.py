@@ -91,6 +91,10 @@ def message_to_ollama(m: Message) -> dict:
 
 @sync_to_async
 def _prepare(session_id, user_message_id):
+    return prepare_messages(session_id, user_message_id)
+
+
+def prepare_messages(session_id, user_message_id):
     """Charge la session et reconstruit le contexte jusqu'au message utilisateur
     cible, en tronquant les messages partiels d'un run précédent (crash)."""
     session = Session.objects.select_related("workspace").get(id=session_id)

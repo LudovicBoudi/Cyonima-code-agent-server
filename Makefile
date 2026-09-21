@@ -10,6 +10,7 @@ help:
 	@echo "  make backend       Lance le backend Django (dev)"
 	@echo "  make frontend      Lance le frontend React (dev)"
 	@echo "  make migrate       Applique les migrations"
+	@echo "  make test          Lance les tests (pytest)"
 	@echo "  make superuser     Crée un superutilisateur"
 	@echo "  make sandbox-build Construit l'image du sandbox"
 	@echo "  make sandbox-prep  Prépare le volume (ownership) des workspaces"
@@ -34,6 +35,9 @@ worker:
 
 migrate-make:
 	cd backend && python manage.py makemigrations
+
+test:
+	cd backend && pytest
 
 superuser:
 	cd backend && python manage.py createsuperuser
