@@ -53,6 +53,7 @@ services:
       SANDBOX_VOLUME_ROOT: /sandbox/workspaces
       USE_SQLITE: "false"
       USE_IN_MEMORY_CHANNEL: "false"
+    user: "${SANDBOX_UID:-1000}:${SANDBOX_GID:-1000}"
     volumes:
       - ./backend:/app
       - ./sandbox/workspaces:/sandbox/workspaces
@@ -80,6 +81,33 @@ services:
       SANDBOX_VOLUME_ROOT: /sandbox/workspaces
       USE_SQLITE: "false"
       USE_IN_MEMORY_CHANNEL: "false"
+    user: "${SANDBOX_UID:-1000}:${SANDBOX_GID:-1000}"
+    volumes:
+      - ./backend:/app
+      - ./sandbox/workspaces:/sandbox/workspaces
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
+  agent-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A config worker -Q agents --concurrency=4 -l info
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://ollama:11434
+      SANDBOX_VOLUME_ROOT: /sandbox/workspaces
+      USE_SQLITE: "false"
+      USE_IN_MEMORY_CHANNEL: "false"
+    user: "${SANDBOX_UID:-1000}:${SANDBOX_GID:-1000}"
     volumes:
       - ./backend:/app
       - ./sandbox/workspaces:/sandbox/workspaces

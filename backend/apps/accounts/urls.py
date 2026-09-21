@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .views import LoginView, MeView, RegisterView, SessionTokenView
+from .views import LoginView, MeView, RegisterView, SessionTokenView, SsoProvidersView
 
 urlpatterns = [
     path("login/", LoginView.as_view(), name="login"),
@@ -9,7 +9,7 @@ urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
     path("me/", MeView.as_view(), name="me"),
     path("session-token/", SessionTokenView.as_view(), name="session-token"),
-    # SSO (OIDC/SAML) + gestion de compte via allauth
+    path("sso/", SsoProvidersView.as_view(), name="sso-providers"),
+    # SSO (OIDC/SAML) via allauth (flux redirect classique)
     path("accounts/", include("allauth.urls")),
-    path("_allauth/", include("allauth.headless.urls")),
 ]

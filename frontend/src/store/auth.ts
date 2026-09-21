@@ -1,5 +1,12 @@
 import { create } from "zustand";
-import { api, clearTokens, getToken, setTokens, type User } from "../api";
+import {
+  api,
+  clearTokens,
+  getToken,
+  sessionToken,
+  setTokens,
+  type User,
+} from "../api";
 
 interface AuthState {
   user: User | null;
@@ -7,6 +14,7 @@ interface AuthState {
   init: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, name: string, password: string) => Promise<void>;
+  ssoCallback: () => Promise<void>;
   logout: () => void;
 }
 
@@ -34,6 +42,11 @@ export const useAuth = create<AuthState>((set) => ({
   register: async (email, name, password) => {
     await api.register(email, name, password);
     await useAuth.getState().login(email, password);
+  },
+  ssoCallback: async () => {
+    const res = await sessionToken();
+    setTokens(res.access, res.refresh);
+    set({ user: res.user });
   },
   logout: () => {
     clearTokens();

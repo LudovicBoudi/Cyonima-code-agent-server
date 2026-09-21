@@ -21,6 +21,14 @@ env = environ.Env(
     OLLAMA_DEFAULT_MODEL=(str, "qwen2.5-coder:7b"),
     SANDBOX_IMAGE=(str, "cyonima/sandbox:latest"),
     SANDBOX_VOLUME_ROOT=(str, str(BASE_DIR.parent / "sandbox" / "workspaces")),
+    SANDBOX_UID=(int, 1000),
+    SANDBOX_GID=(int, 1000),
+    SANDBOX_CAP_DROP=(list, ["ALL"]),
+    SANDBOX_MEM_LIMIT=(str, "2g"),
+    SANDBOX_CPU_LIMIT=(float, 1.0),
+    SANDBOX_PIDS_LIMIT=(int, 512),
+    SANDBOX_READ_ONLY=(bool, True),
+    SANDBOX_TMPFS_SIZE=(str, "1g"),
     CORS_ALLOWED_ORIGINS=(list, ["http://localhost:5173"]),
     USE_SQLITE=(bool, False),
     USE_IN_MEMORY_CHANNEL=(bool, False),
@@ -57,7 +65,6 @@ THIRD_PARTY_APPS = [
     "allauth.socialaccount",
     "allauth.socialaccount.providers.openid_connect",
     "allauth.socialaccount.providers.saml",
-    "allauth.headless",
     "django_filters",
     "channels",
     "drf_spectacular",
@@ -157,19 +164,38 @@ ACCOUNT_EMAIL_VERIFICATION = "optional"
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 
-# allauth headless (API auth pour le frontend React)
-HEADLESS_ONLY = True
-HEADLESS_FRONTEND_URLS = {
-    "account_confirm_email": "{}/confirm-email/{{key}}".format(FRONTEND_URL),
-    "account_reset_password": "{}/reset-password".format(FRONTEND_URL),
-    "account_reset_password_from_key": "{}/reset-password/{{key}}".format(FRONTEND_URL),
-}
+# ---------------------------------------------------------------------------
+# SSO (OIDC / SAML) via django-allauth
+#
+# Flux : le frontend redirige vers `/api/auth/accounts/<provider>/login/` →
+# IdP → callback → allauth établit la session → redirection vers
+# `LOGIN_REDIRECT_URL` (frontend) → le frontend appelle
+# `/api/auth/session-token/` pour convertir la session en JWT.
+# ---------------------------------------------------------------------------
+LOGIN_REDIRECT_URL = f"{FRONTEND_URL}/auth/callback"
+ACCOUNT_LOGOUT_REDIRECT_URL = f"{FRONTEND_URL}/login"
+
+SOCIALACCOUNT_LOGIN_ON_GET = True
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
+SOCIALACCOUNT_STORE_TOKENS = True
+
+_oidc_apps = []
+if env("OIDC_CLIENT_ID", default=""):
+    _oidc_apps.append(
+        {
+            "provider_id": env("OIDC_PROVIDER_ID", default="oidc"),
+            "name": env("OIDC_NAME", default="SSO"),
+            "client_id": env("OIDC_CLIENT_ID", default=""),
+            "secret": env("OIDC_CLIENT_SECRET", default=""),
+            "settings": {"server_url": env("OIDC_SERVER_URL", default="")},
+        }
+    )
 
 SOCIALACCOUNT_PROVIDERS = {
-    "openid_connect": {
-        # Les providers OIDC (Entra ID, Okta, Google…) sont configurés via
-        # l'admin Django (SocialApp) ou via variables d'environnement.
-    }
+    "openid_connect": {"APPS": _oidc_apps},
+    # SAML et autres providers : configurés via l'admin Django (SocialApp) ou
+    # en complétant ce dictionnaire (voir docs/ARCHITECTURE.md).
 }
 
 # ---------------------------------------------------------------------------
@@ -195,13 +221,15 @@ REST_FRAMEWORK = {
 # ---------------------------------------------------------------------------
 # Channels (WebSocket streaming)
 # ---------------------------------------------------------------------------
+REDIS_URL = env("REDIS_URL")
+
 if env("USE_IN_MEMORY_CHANNEL"):
     CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 else:
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {"hosts": [env("REDIS_URL")]},
+            "CONFIG": {"hosts": [REDIS_URL]},
         }
     }
 
@@ -212,6 +240,11 @@ CELERY_BROKER_URL = env("REDIS_URL")
 CELERY_RESULT_BACKEND = env("REDIS_URL")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
+CELERY_TASK_ROUTES = {
+    # Les agents (longs) tournent sur une file dédiée, pour ne pas bloquer
+    # les tâches courtes (pull, provisioning).
+    "apps.agents.tasks.run_agent_task": {"queue": "agents"},
+}
 
 # ---------------------------------------------------------------------------
 # Ollama (serveur partagé)
@@ -224,6 +257,14 @@ OLLAMA_DEFAULT_MODEL = env("OLLAMA_DEFAULT_MODEL")
 # ---------------------------------------------------------------------------
 SANDBOX_IMAGE = env("SANDBOX_IMAGE")
 SANDBOX_VOLUME_ROOT = env("SANDBOX_VOLUME_ROOT")
+SANDBOX_UID = env("SANDBOX_UID")
+SANDBOX_GID = env("SANDBOX_GID")
+SANDBOX_CAP_DROP = env("SANDBOX_CAP_DROP")
+SANDBOX_MEM_LIMIT = env("SANDBOX_MEM_LIMIT")
+SANDBOX_CPU_LIMIT = env("SANDBOX_CPU_LIMIT")
+SANDBOX_PIDS_LIMIT = env("SANDBOX_PIDS_LIMIT")
+SANDBOX_READ_ONLY = env("SANDBOX_READ_ONLY")
+SANDBOX_TMPFS_SIZE = env("SANDBOX_TMPFS_SIZE")
 
 # ---------------------------------------------------------------------------
 # Internationalisation / fuseaux

@@ -39,6 +39,16 @@ export default function Home() {
     api.sessions(workspaceId).then(setSessions);
   }, [workspaceId]);
 
+  useEffect(() => {
+    // Polling pendant le provisioning (status "creating")
+    const creating = workspaces.some((w) => w.status === "creating");
+    if (!creating || !orgId) return;
+    const t = window.setInterval(() => {
+      api.workspaces(orgId).then(setWorkspaces);
+    }, 2000);
+    return () => window.clearInterval(t);
+  }, [workspaces, orgId]);
+
   async function createOrg() {
     const name = prompt("Nom de l'organisation");
     if (!name) return;
@@ -118,6 +128,12 @@ export default function Home() {
               >
                 <FolderGit2 size={15} />
                 <span className="truncate">{w.name}</span>
+                {w.status === "creating" && <span className="sub">…</span>}
+                {w.status === "error" && (
+                  <span title="Erreur de provisioning" style={{ color: "var(--color-danger)" }}>
+                    ⚠
+                  </span>
+                )}
               </div>
             ))}
           </div>

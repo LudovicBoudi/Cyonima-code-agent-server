@@ -55,8 +55,9 @@ python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 
-# 2bis. Worker Celery (pour les pulls Ollama avec progression)
-cd backend && celery -A config worker -l info
+# 2bis. Workers Celery (pulls/provisioning + agents)
+cd backend && celery -A config worker -l info          # tâches courtes
+cd backend && celery -A config worker -Q agents -l info # exécution des agents
 
 # 3. Sandbox (image Docker)
 make sandbox-build
@@ -74,6 +75,23 @@ cd frontend && npm install && npm run dev
 - `GET/POST /api/sessions/` → sessions d'agent
 - `WS   /ws/sessions/{id}/?token=<jwt>` → streaming agent
 - `GET  /api/ollama/models/` → modèles Ollama installés
+
+## Déploiement multi-workers
+
+L'état d'exécution des agents (verrou + annulation) est partagé via **Redis**
+(`apps/agents/orchestrator.py`), donc plusieurs processus ASGI peuvent coopérer.
+Pour scaler :
+
+```bash
+# Redis (obligatoire, pas de USE_IN_MEMORY_CHANNEL)
+USE_IN_MEMORY_CHANNEL=false
+
+# N processus ASGI (daphne) derrière un load-balancer
+daphne -b 0.0.0.0 -p 8000 config.asgi:application
+```
+
+> En dev mono-process, on peut garder `USE_IN_MEMORY_CHANNEL=true` et
+> `USE_SQLITE=true` (retombée automatique sans Redis).
 
 ## Licence
 

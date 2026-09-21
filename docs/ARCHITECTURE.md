@@ -51,9 +51,16 @@ d'exécution.
 
 - **Local** : `POST /api/auth/login/` → JWT (SimpleJWT). Inscription via
   `POST /api/auth/register/`.
-- **SSO** : django-allauth (`socialaccount` OIDC + SAML). Le login social
-  utilise le flux redirect classique (`/api/auth/accounts/<provider>/login/`),
-  puis `GET /api/auth/session-token/` convertit la session en JWT pour l'API.
+- **SSO OIDC** : django-allauth (`socialaccount` `openid_connect`). Un provider
+  est configuré via env (`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`,
+  `OIDC_SERVER_URL`, `OIDC_PROVIDER_ID`, `OIDC_NAME`) → `SOCIALACCOUNT_PROVIDERS`.
+  Flux redirect : le frontend affiche les providers (`GET /api/auth/sso/`) et
+  redirige vers `login_url` (`/api/auth/accounts/oidc/<provider>/login/`) → IdP
+  → callback → allauth établit la session → redirection `LOGIN_REDIRECT_URL`
+  (frontend `/auth/callback`) → `GET /api/auth/session-token/` convertit la
+  session en JWT.
+- **SSO SAML** : `allauth.socialaccount.providers.saml` est actif ; configuration
+  via l'admin Django (SocialApp) ou `SOCIALACCOUNT_PROVIDERS["saml"]`.
 - **WebSocket** : le JWT est passé en query string (`?token=`), validé par
   `apps/sessions/middleware.py`.
 
@@ -68,6 +75,24 @@ d'exécution.
   Docker, la sandbox se dégrade proprement : outils fichiers OK, `bash` en
   erreur.
 
+### Durcissement
+
+Chaque conteneur est lancé (voir `apps/workspaces/sandbox.py`) avec :
+
+| Contrôle | Valeur |
+|---|---|
+| Utilisateur | non-root `agent` (UID/GID alignés sur l'hôte) |
+| Capabilities | `--cap-drop ALL` |
+| Privilèges | `--security-opt no-new-privileges` |
+| Réseau | coupé par défaut (`workspace.allow_network` pour l'activer) |
+| FS racine | lecture seule + tmpfs `/tmp` et `/home/agent` |
+| Limites | mémoire (`SANDBOX_MEM_LIMIT`), CPU (`SANDBOX_CPU_LIMIT`), pids (`SANDBOX_PIDS_LIMIT`) |
+
+> **Alignement UID** : le backend et le sandbox doivent tourner avec le même
+> UID/GID (`SANDBOX_UID`/`SANDBOX_GID`, défaut `1000`) pour que le bind-mount
+> soit accessible en écriture des deux côtés. Le répertoire volume doit être
+> possédé par cet UID (`make sandbox-prep`).
+
 ## Boucle agent (`apps/agents/loop.py`)
 
 Équivalent de `SessionManager::agent_loop` :
@@ -78,15 +103,29 @@ d'exécution.
    `tool_call` en temps réel.
 3. Si le modèle renvoie des tool calls → gateway de permissions
    (`apps/agents/permissions.py`) : `auto` / `ask` / `deny`. `bash` = `ask` par
-   défaut (le frontend affiche un dialogue d'approbation, la réponse transite
-   par le WebSocket `permission_response`).
+   défaut. La demande est **persistée** (`PermissionRequest`) et résolue par le
+   frontend (WebSocket `permission_response` ou REST `POST …/respond/`) ; la
+   boucle attend la résolution en polling (timeout 600 s).
 4. Exécute l'outil, renvoie le résultat au LLM, itère (max 32 tours).
 5. Persiste les messages en base et émet `done` (toujours, même en erreur).
 
-## Streaming
+## Streaming & exécution des agents
 
 - `SessionConsumer` (Channels) : un WebSocket par session
-  (`/ws/sessions/<id>/?token=…`).
+  (`/ws/sessions/<id>/?token=…`). Il rejoint le groupe `session_<id>`.
+- La boucle agent (`apps/agents/loop.py`) est **exécutée par Celery**
+  (`apps/agents/tasks.py`, file dédiée `agents`), indépendamment du worker
+  web/WS. Les événements sont diffusés via le groupe Channels, donc la
+  génération continue et les demandes d'approbation restent consultables après
+  une reconnexion.
+- **Reprise après crash** : `acks_late` + `reject_on_worker_lost` → si le worker
+  meurt en cours de génération, le message est redélivré. La reprise est
+  idempotente : message utilisateur créé une seule fois (`run_id`), et la boucle
+  tronque les messages partiels du run interrompu (`_prepare`).
+- **Orchestration Redis** (`apps/agents/orchestrator.py`) : verrou à valeur
+  `agent:run:<session_id>` (anti double-send, ré-acquis en redélivraison) et
+  drapeau `agent:cancel:<session_id>` (annulation cross-worker, pollé ≤ 1×/s).
+  Sans broker, retombée sur une exécution asyncio locale (dev mono-process).
 - Messages entrants : `send`, `cancel`, `permission_response`.
 - Événements sortants : `token`, `thinking`, `tool_call`, `tool_result`,
   `permission_request`, `done`, `error`.
@@ -99,6 +138,7 @@ d'exécution.
 | `organizations.Organization` / `Membership` / `Team` / `TeamMembership` | tenance + rôles |
 | `workspaces.Workspace` | dépôt + statut + conteneur |
 | `sessions.Session` / `Message` | conversation d'agent (persistance) |
+| `agents.PermissionRequest` | demande d'approbation persistée |
 
 ## Configuration
 
@@ -112,10 +152,16 @@ d'exécution.
   progression exposée par `GET /api/ollama/pulls/<task_id>/` (polling frontend).
   Un worker `celery -A config worker` est requis ; sans broker, l'API retombe
   sur un pull synchrone (dev uniquement).
-- Le **provisioning** des workspaces est synchrone (clone git + démarrage
-  conteneur) — à déporter en tâche Celery.
-- L'**approbation** des commandes est stockée en mémoire par connexion
-  WebSocket ; une reconnexion perd les demandes en attente.
-- Le **SSO** (OIDC/SAML) est structuré mais pas testé de bout en bout.
-- La **sandbox** doit être durcie (utilisateur non-root, `--cap-drop`,
-  `--network=none`, limites CPU/mémoire) pour un usage production.
+- **Provisioning des workspaces** : asynchrone via Celery
+  (`apps/workspaces/tasks.py`) — création → `creating`, puis `ready`/`error`
+  (polling frontend). La suppression (conteneur + fichiers) est également
+  déportée (`destroy_workspace_task`). Sans broker, retombée synchrone.
+- **Approbations persistantes** : `PermissionRequest` en base, résolues via REST
+  ou WebSocket ; la boucle agent attend en polling (timeout 600 s).
+- **Exécution des agents** : déléguée à Celery (file `agents`), avec reprise
+  après crash (`acks_late`). Limite : la reprise **rejoue** le run depuis le
+  message utilisateur (pas de reprise au token près), ce qui est acceptable pour
+  un agent. Nécessite un worker dédié `celery -A config worker -Q agents`.
+- Le **SSO OIDC** est vérifié jusqu'à la redirection vers l'IdP ; le callback
+  (échange de code, userinfo) dépend d'un IdP réel et reste à valider en
+  conditions réelles (Entra ID / Okta / Keycloak).

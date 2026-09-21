@@ -17,11 +17,18 @@ class WorkspaceSerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "git_url",
+            "allow_network",
             "status",
             "container_status",
             "created_at",
         ]
-        read_only_fields = ["id", "status", "container_status", "created_at"]
+        read_only_fields = [
+            "id",
+            "organization",
+            "status",
+            "container_status",
+            "created_at",
+        ]
 
     def get_container_status(self, obj):
         return sandbox.container_status(obj)
@@ -30,9 +37,16 @@ class WorkspaceSerializer(serializers.ModelSerializer):
         org = self.context["organization"]
         validated_data["organization"] = org
         validated_data["created_by"] = self.context["request"].user
+        validated_data["status"] = Workspace.Status.CREATING
         workspace = Workspace.objects.create(**validated_data)
 
-        from .services import provision_workspace
+        from .tasks import provision_workspace_task
 
-        provision_workspace(workspace)
+        try:
+            provision_workspace_task.delay(str(workspace.id))
+        except Exception as exc:
+            # Fallback synchrone (dev sans broker/worker)
+            from .services import provision_workspace
+
+            provision_workspace(workspace)
         return workspace

@@ -5,11 +5,12 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.agents.services import list_pending, respond
 from apps.organizations.permissions import is_org_member
 from apps.workspaces.models import Workspace
 
 from .models import Message, Session
-from .serializers import MessageSerializer, SessionSerializer
+from .serializers import MessageSerializer, PermissionRequestSerializer, SessionSerializer
 
 
 class SessionViewSet(viewsets.ModelViewSet):
@@ -49,6 +50,24 @@ class SessionViewSet(viewsets.ModelViewSet):
 
         session = self.get_object()
         return Response(files.git_status(session.workspace))
+
+    @action(detail=True, methods=["get"])
+    def permissions(self, request, pk=None):
+        session = self.get_object()
+        pending = list_pending(session.id)
+        return Response(PermissionRequestSerializer(pending, many=True).data)
+
+    @action(detail=True, methods=["post"])
+    def respond(self, request, pk=None):
+        session = self.get_object()
+        call_id = request.data.get("call_id")
+        approved = bool(request.data.get("approved", False))
+        if not call_id:
+            return Response({"error": "call_id manquant"}, status=status.HTTP_400_BAD_REQUEST)
+        ok = respond(session.id, call_id, approved)
+        if not ok:
+            return Response({"error": "demande introuvable ou déjà résolue"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"call_id": call_id, "status": "approved" if approved else "denied"})
 
     @action(detail=True, methods=["post"])
     def fork(self, request, pk=None):

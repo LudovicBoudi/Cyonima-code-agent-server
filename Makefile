@@ -1,4 +1,7 @@
-.PHONY: help backend frontend up down migrate superuser sandbox-build
+.PHONY: help backend frontend up down migrate superuser sandbox-build sandbox-prep
+
+SANDBOX_UID ?= 1000
+SANDBOX_GID ?= 1000
 
 help:
 	@echo "Cyonima Code Agent Server — commandes"
@@ -9,6 +12,7 @@ help:
 	@echo "  make migrate       Applique les migrations"
 	@echo "  make superuser     Crée un superutilisateur"
 	@echo "  make sandbox-build Construit l'image du sandbox"
+	@echo "  make sandbox-prep  Prépare le volume (ownership) des workspaces"
 
 up:
 	docker compose up -d db redis ollama
@@ -35,4 +39,9 @@ superuser:
 	cd backend && python manage.py createsuperuser
 
 sandbox-build:
-	docker build -t cyonima/sandbox:latest sandbox/
+	docker build -t cyonima/sandbox:latest \
+		--build-arg UID=$(SANDBOX_UID) --build-arg GID=$(SANDBOX_GID) sandbox/
+
+sandbox-prep:
+	mkdir -p sandbox/workspaces
+	chown -R $(SANDBOX_UID):$(SANDBOX_GID) sandbox/workspaces

@@ -42,8 +42,15 @@ def ensure_workspace_dir(workspace):
 def start_container(workspace):
     """Démarre (ou réutilise) le conteneur sandbox du workspace.
 
-    Retourne l'id du conteneur, ou None si Docker est indisponible (dégradé :
-    les outils fichiers fonctionnent sur le bind-mount hôte, `bash` échouera).
+    Durcissement appliqué (configurable via settings) :
+      - utilisateur non-root (UID/GID alignés sur l'hôte pour le bind-mount),
+      - `cap_drop` de toutes les capabilities,
+      - `no-new-privileges`,
+      - limites CPU / mémoire / nombre de processus,
+      - réseau coupé par défaut (`workspace.allow_network` pour l'activer),
+      - système de fichiers racine en lecture seule + tmpfs pour `/tmp` et `/home`.
+
+    Retourne l'id du conteneur, ou None si Docker est indisponible (dégradé).
     """
     if not docker_available():
         logger.warning("Docker indisponible — sandbox dégradée pour %s", workspace.id)
@@ -64,13 +71,27 @@ def start_container(workspace):
         except Exception:
             logger.warning("Conteneur %s introuvable, recréation", container_id)
 
+    user = f"{settings.SANDBOX_UID}:{settings.SANDBOX_GID}"
+    tmpfs_size = settings.SANDBOX_TMPFS_SIZE
+
     container = client.containers.run(
         image,
         command="sleep infinity",
         detach=True,
         working_dir="/workspace",
+        user=user,
         volumes={host_path: {"bind": "/workspace", "mode": "rw"}},
-        network_mode="bridge",
+        cap_drop=settings.SANDBOX_CAP_DROP or ["ALL"],
+        security_opt=["no-new-privileges:true"],
+        network_disabled=not workspace.allow_network,
+        mem_limit=settings.SANDBOX_MEM_LIMIT,
+        nano_cpus=int(settings.SANDBOX_CPU_LIMIT * 1_000_000_000),
+        pids_limit=settings.SANDBOX_PIDS_LIMIT,
+        read_only=settings.SANDBOX_READ_ONLY,
+        tmpfs={
+            "/tmp": f"size={tmpfs_size},mode=1777",
+            "/home/agent": f"size={tmpfs_size},mode=1777",
+        },
         labels={"cyonima.workspace": str(workspace.id)},
         remove=False,
     )
@@ -81,21 +102,23 @@ def start_container(workspace):
 
 
 def stop_container(workspace):
-    client = get_client()
     if not workspace.container_id:
         return
+    if not docker_available():
+        return
     try:
-        client.containers.get(workspace.container_id).stop(timeout=5)
+        get_client().containers.get(workspace.container_id).stop(timeout=5)
     except Exception as exc:
         logger.warning("Stop conteneur impossible: %s", exc)
 
 
 def remove_container(workspace):
-    client = get_client()
     if not workspace.container_id:
         return
+    if not docker_available():
+        return
     try:
-        client.containers.get(workspace.container_id).remove(force=True)
+        get_client().containers.get(workspace.container_id).remove(force=True)
     except Exception as exc:
         logger.warning("Remove conteneur impossible: %s", exc)
     workspace.container_id = ""

@@ -49,6 +49,16 @@ export interface OllamaModel {
   size: number;
 }
 
+export interface PermissionRequest {
+  id: string;
+  call_id: string;
+  tool: string;
+  arguments: any;
+  preview: string;
+  status: string;
+  created_at: string;
+}
+
 const TOKEN_KEY = "cyonima.token";
 const REFRESH_KEY = "cyonima.refresh";
 
@@ -103,6 +113,10 @@ export const api = {
       body: JSON.stringify({ email, name, password }),
     }),
   me: () => request<User>("/auth/me/"),
+  ssoProviders: () =>
+    request<{ providers: { id: string; name: string; login_url: string }[] }>(
+      "/auth/sso/",
+    ),
 
   orgs: async () => listResult<Organization>(await request("/orgs/")),
   createOrg: (name: string, slug: string) =>
@@ -133,6 +147,13 @@ export const api = {
   forkSession: (id: string) =>
     request<Session>(`/sessions/${id}/fork/`, { method: "POST" }),
   history: (id: string) => request<Message[]>(`/sessions/${id}/history/`),
+  permissions: (id: string) =>
+    request<PermissionRequest[]>(`/sessions/${id}/permissions/`),
+  respondPermission: (id: string, callId: string, approved: boolean) =>
+    request<{ status: string }>(`/sessions/${id}/respond/`, {
+      method: "POST",
+      body: JSON.stringify({ call_id: callId, approved }),
+    }),
   gitStatus: (id: string) =>
     request<{ is_repo: boolean; changes: { status: string; path: string }[] }>(
       `/sessions/${id}/git-status/`,
@@ -164,4 +185,14 @@ export function wsUrl(sessionId: string): string {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const base = `${proto}://${location.host}`;
   return `${base}/ws/sessions/${sessionId}/?token=${token}`;
+}
+
+export async function sessionToken(): Promise<{
+  access: string;
+  refresh: string;
+  user: User;
+}> {
+  const res = await fetch("/api/auth/session-token/", { credentials: "include" });
+  if (!res.ok) throw new Error("Non authentifié via SSO");
+  return res.json();
 }

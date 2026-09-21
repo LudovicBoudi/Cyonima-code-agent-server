@@ -43,6 +43,7 @@ class Message(BaseModel):
     tool_calls = models.JSONField(default=list, blank=True)
     tool_call_id = models.CharField(max_length=128, blank=True)
     meta = models.JSONField(default=dict, blank=True)
+    run_id = models.CharField(max_length=64, blank=True, db_index=True)
 
     class Meta:
         ordering = ["created_at"]

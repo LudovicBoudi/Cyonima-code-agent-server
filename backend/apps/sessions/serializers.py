@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.agents.models import PermissionRequest
+
 from .models import Message, Session
 
 
@@ -35,3 +37,10 @@ class SessionSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "workspace_name", "created_at", "updated_at"]
+
+
+class PermissionRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PermissionRequest
+        fields = ["id", "call_id", "tool", "arguments", "preview", "status", "created_at"]
+        read_only_fields = ["id", "call_id", "tool", "arguments", "preview", "status", "created_at"]

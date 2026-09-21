@@ -28,8 +28,14 @@ class WorkspaceViewSet(OrgScopedViewSetMixin, viewsets.ModelViewSet):
         return [IsAuthenticated(), IsOrgMember()]
 
     def perform_destroy(self, instance):
-        services.destroy_workspace(instance)
-        instance.delete()
+        from .tasks import destroy_workspace_task
+
+        try:
+            destroy_workspace_task.delay(str(instance.id))
+        except Exception:
+            # Fallback synchrone (dev sans broker/worker)
+            services.destroy_workspace(instance)
+            instance.delete()
 
     @action(detail=True, methods=["post"])
     def start(self, request, pk=None, org_pk=None):

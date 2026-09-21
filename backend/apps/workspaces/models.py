@@ -31,6 +31,10 @@ class Workspace(BaseModel):
     git_url = models.URLField(blank=True)
     container_image = models.CharField(max_length=255, blank=True)
     container_id = models.CharField(max_length=128, blank=True)
+    allow_network = models.BooleanField(
+        default=False,
+        help_text="Autorise l'accès réseau dans le sandbox (désactivé par défaut).",
+    )
     status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.CREATING
     )

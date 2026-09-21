@@ -19,10 +19,12 @@ interface StreamState {
 }
 
 interface PermissionRequest {
+  id?: string;
   call_id: string;
   tool: string;
   arguments: any;
   preview: string;
+  status?: string;
 }
 
 const REASONING_OPTIONS = ["auto", "off", "low", "medium", "high"];
@@ -35,7 +37,7 @@ export default function SessionView({ session }: { session: Session }) {
   const [reasoning, setReasoning] = useState(session.reasoning || "auto");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [perm, setPerm] = useState<PermissionRequest | null>(null);
+  const [perms, setPerms] = useState<PermissionRequest[]>([]);
   const [usage, setUsage] = useState<Record<string, number> | null>(null);
   const [files, setFiles] = useState<{ status: string; path: string }[]>([]);
 
@@ -50,6 +52,7 @@ export default function SessionView({ session }: { session: Session }) {
       if (!model && r.default_model) setModel(r.default_model);
     });
     loadGitStatus();
+    loadPendingPermissions();
 
     const ws = new WebSocket(wsUrl(session.id));
     wsRef.current = ws;
@@ -60,6 +63,18 @@ export default function SessionView({ session }: { session: Session }) {
     return () => ws.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id]);
+
+  async function loadPendingPermissions() {
+    try {
+      const pending = await api.permissions(session.id);
+      setPerms((prev) => {
+        const known = new Set(prev.map((p) => p.call_id));
+        return [...prev, ...pending.filter((p) => !known.has(p.call_id))];
+      });
+    } catch {
+      /* ignore */
+    }
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -104,7 +119,10 @@ export default function SessionView({ session }: { session: Session }) {
         });
         break;
       case "permission_request":
-        setPerm(event);
+        setPerms((prev) => {
+          if (prev.some((p) => p.call_id === event.call_id)) return prev;
+          return [...prev, event];
+        });
         break;
       case "done":
         setUsage(event.usage ?? null);
@@ -146,9 +164,13 @@ export default function SessionView({ session }: { session: Session }) {
     wsRef.current?.send(JSON.stringify({ type: "cancel" }));
   }
 
-  function respondPermission(approved: boolean) {
-    wsRef.current?.send(JSON.stringify({ type: "permission_response", call_id: perm?.call_id, approved }));
-    setPerm(null);
+  async function respondPermission(callId: string, approved: boolean) {
+    setPerms((prev) => prev.filter((p) => p.call_id !== callId));
+    try {
+      await api.respondPermission(session.id, callId, approved);
+    } catch {
+      /* la demande a pu expirer */
+    }
   }
 
   return (
@@ -195,19 +217,21 @@ export default function SessionView({ session }: { session: Session }) {
           <div ref={bottomRef} />
         </div>
 
-        {perm && (
-          <div className="permission-bar">
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Approbation requise</div>
+        {perms.map((perm) => (
+          <div className="permission-bar" key={perm.call_id}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>
+              Approbation requise — <code>{perm.tool}</code>
+            </div>
             <div className="mono" style={{ fontSize: 12.5 }}>{perm.preview}</div>
             <pre className="mono" style={{ fontSize: 11, maxHeight: 100, overflow: "auto" }}>
               {JSON.stringify(perm.arguments, null, 2)}
             </pre>
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button className="btn sm" onClick={() => respondPermission(true)}>Autoriser</button>
-              <button className="btn sm danger" onClick={() => respondPermission(false)}>Refuser</button>
+              <button className="btn sm" onClick={() => respondPermission(perm.call_id, true)}>Autoriser</button>
+              <button className="btn sm danger" onClick={() => respondPermission(perm.call_id, false)}>Refuser</button>
             </div>
           </div>
-        )}
+        ))}
 
         <div className="chatbox">
           <div className="controls">

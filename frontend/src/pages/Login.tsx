@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../store/auth";
+import { api } from "../api";
 
 export default function Login() {
   const { login, register } = useAuth();
@@ -9,6 +10,13 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [providers, setProviders] = useState<
+    { id: string; name: string; login_url: string }[]
+  >([]);
+
+  useEffect(() => {
+    api.ssoProviders().then((r) => setProviders(r.providers)).catch(() => {});
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,6 +76,35 @@ export default function Login() {
             {mode === "login" ? "Créer un compte" : "J'ai déjà un compte"}
           </button>
         </div>
+
+        {providers.length > 0 && (
+          <>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                margin: "16px 0",
+                color: "var(--color-muted)",
+                fontSize: 12,
+              }}
+            >
+              <span style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+              ou
+              <span style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+            </div>
+            {providers.map((p) => (
+              <a
+                key={p.id}
+                href={p.login_url}
+                className="btn ghost"
+                style={{ width: "100%", textDecoration: "none", justifyContent: "center" }}
+              >
+                Se connecter avec {p.name}
+              </a>
+            ))}
+          </>
+        )}
       </form>
     </div>
   );

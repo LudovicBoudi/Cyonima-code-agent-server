@@ -1,9 +1,11 @@
-import asyncio
 import logging
 
 from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.conf import settings
+
+from apps.agents.manager import get_manager
+from apps.agents.services import respond
 
 from .models import Session
 
@@ -19,8 +21,12 @@ def _load_session(session_id):
 
 
 class SessionConsumer(AsyncJsonWebsocketConsumer):
-    """WebSocket d'une session d'agent : reçoit `send`/`cancel`/`permission_response`,
-    émet les événements de streaming (token, thinking, tool_call, tool_result, done)."""
+    """WebSocket d'une session d'agent.
+
+    Rejoint le groupe `session_<id>` pour recevoir les événements de la boucle
+    agent (qui tourne dans le SessionManager, indépendamment de cette connexion)
+    et transmet les commandes `send`/`cancel`/`permission_response`.
+    """
 
     async def connect(self):
         self.session_id = self.scope["url_route"]["kwargs"]["session_id"]
@@ -35,9 +41,8 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4403)
             return
 
-        self.cancel_event = asyncio.Event()
-        self.pending = {}  # call_id -> asyncio.Future
-        self.task = None
+        self.group_name = f"session_{self.session_id}"
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
     async def receive_json(self, content, **kwargs):
@@ -45,20 +50,14 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
         if msg_type == "send":
             await self._handle_send(content)
         elif msg_type == "cancel":
-            self.cancel_event.set()
-            for fut in self.pending.values():
-                if not fut.done():
-                    fut.set_result(False)
+            get_manager().cancel(self.session_id)
         elif msg_type == "permission_response":
-            fut = self.pending.pop(content.get("call_id"), None)
-            if fut and not fut.done():
-                fut.set_result(bool(content.get("approved", False)))
+            call_id = content.get("call_id")
+            approved = bool(content.get("approved", False))
+            if call_id:
+                await sync_to_async(respond)(self.session_id, call_id, approved)
 
     async def _handle_send(self, content):
-        if self.task and not self.task.done():
-            await self.send_json({"type": "error", "error": "Génération déjà en cours"})
-            return
-
         message = content.get("message", "").strip()
         if not message:
             await self.send_json({"type": "error", "error": "Message vide"})
@@ -70,33 +69,15 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
         self.session.reasoning = reasoning
         await sync_to_async(self.session.save)(update_fields=["model", "reasoning"])
 
-        self.cancel_event = asyncio.Event()
-        self.task = asyncio.create_task(self._run(model, reasoning, message))
-
-    async def _run(self, model, reasoning, message):
-        from apps.agents.loop import run_agent
-
-        async def emit(event):
-            event["session_id"] = self.session_id
-            await self.send_json(event)
-
-        async def approve(request):
-            fut = asyncio.get_running_loop().create_future()
-            self.pending[request["call_id"]] = fut
-            try:
-                return await asyncio.wait_for(fut, timeout=600)
-            except asyncio.TimeoutError:
-                return False
-
-        try:
-            await run_agent(
-                self.session_id, message, model, reasoning, emit, approve, self.cancel_event
+        started = get_manager().send(self.session_id, model, reasoning, message)
+        if not started:
+            await self.send_json(
+                {"type": "error", "error": "Génération déjà en cours"}
             )
-        except Exception as exc:
-            logger.exception("Erreur agent dans la session %s", self.session_id)
-            await self.send_json({"type": "error", "error": str(exc)})
-            await self.send_json({"type": "done", "usage": {}})
+
+    async def session_event(self, event):
+        await self.send_json(event["event"])
 
     async def disconnect(self, close_code):
-        if self.task and not self.task.done():
-            self.cancel_event.set()
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
