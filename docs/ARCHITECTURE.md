@@ -108,8 +108,10 @@ d'exécution.
 
 ## Points d'attention / limites actuelles
 
-- Le **pull Ollama** est synchrone (pas de progression streamée) — à faire via
-  Celery + Redis.
+- **Pull Ollama** : asynchrone via Celery + Redis (`apps/ollama/tasks.py`),
+  progression exposée par `GET /api/ollama/pulls/<task_id>/` (polling frontend).
+  Un worker `celery -A config worker` est requis ; sans broker, l'API retombe
+  sur un pull synchrone (dev uniquement).
 - Le **provisioning** des workspaces est synchrone (clone git + démarrage
   conteneur) — à déporter en tâche Celery.
 - L'**approbation** des commandes est stockée en mémoire par connexion

@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .client import OllamaClient
+from .progress import get_progress
+from .tasks import pull_model_task
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +37,42 @@ class OllamaModelDetailView(views.APIView):
 
 
 class OllamaPullView(views.APIView):
+    """Lance un pull en tâche Celery. Retourne le task_id (202 Accepted).
+
+    Fallback : si le broker (Redis) est indisponible, le pull est exécuté de
+    manière synchrone (bloquant) — utile uniquement en dev sans worker.
+    """
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request, name):
-        client = OllamaClient()
-        progress = []
+        try:
+            task = pull_model_task.delay(name)
+            return Response(
+                {"task_id": task.id, "model": name, "status": "pulling"},
+                status=status.HTTP_202_ACCEPTED,
+            )
+        except Exception as exc:
+            logger.warning("Broker indisponible, pull synchrone (%s)", exc)
+            try:
+                ok = async_to_sync(OllamaClient().pull)(name)
+                return Response({"model": name, "status": "success" if ok else "error"})
+            except Exception as pull_exc:
+                logger.exception("Pull synchrone échoué")
+                return Response(
+                    {"model": name, "status": "error", "error": str(pull_exc)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
 
-        def _on_progress(data):
-            progress.append(data)
 
-        ok = async_to_sync(client.pull)(name, on_progress=_on_progress)
-        if not ok:
-            return Response({"error": "Pull échoué"}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({"pulled": name, "status": "success"})
+class OllamaPullStatusView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, task_id):
+        state = get_progress(task_id)
+        if state is None:
+            return Response(
+                {"task_id": task_id, "status": "unknown"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(state)

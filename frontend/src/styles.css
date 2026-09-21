@@ -426,3 +426,16 @@ button {
 .muted {
   color: var(--color-muted);
 }
+
+.pull-input {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-fg);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+}
+.pull-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}

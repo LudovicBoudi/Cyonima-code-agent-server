@@ -55,6 +55,9 @@ python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 
+# 2bis. Worker Celery (pour les pulls Ollama avec progression)
+cd backend && celery -A config worker -l info
+
 # 3. Sandbox (image Docker)
 make sandbox-build
 

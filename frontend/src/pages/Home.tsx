@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Bot, FolderGit2, LogOut, Plus, Building2, MessageSquare } from "lucide-react";
+import { Bot, FolderGit2, LogOut, Plus, Building2, MessageSquare, Boxes } from "lucide-react";
 import { api, type Organization, type Session, type Workspace } from "../api";
 import { useAuth } from "../store/auth";
 import SessionView from "./SessionView";
+import OllamaView from "./OllamaView";
 
 export default function Home() {
   const { user, logout } = useAuth();
+  const [view, setView] = useState<"main" | "ollama">("main");
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [orgId, setOrgId] = useState<string>("");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -60,6 +62,7 @@ export default function Home() {
     const s = await api.createSession(workspaceId);
     setSessions((prev) => [s, ...prev]);
     setActiveSession(s);
+    setView("main");
   }
 
   async function deleteSession(id: string) {
@@ -75,6 +78,14 @@ export default function Home() {
           <Bot size={18} /> Cyonima
         </div>
         <nav>
+          <div
+            className={`item ${view === "ollama" ? "active" : ""}`}
+            onClick={() => setView("ollama")}
+          >
+            <Boxes size={15} />
+            <span className="truncate">Modèles Ollama</span>
+          </div>
+
           <div className="section">Organisation</div>
           <select
             value={orgId}
@@ -100,7 +111,10 @@ export default function Home() {
               <div
                 key={w.id}
                 className={`item ${w.id === workspaceId ? "active" : ""}`}
-                onClick={() => setWorkspaceId(w.id)}
+                onClick={() => {
+                  setWorkspaceId(w.id);
+                  setView("main");
+                }}
               >
                 <FolderGit2 size={15} />
                 <span className="truncate">{w.name}</span>
@@ -121,7 +135,10 @@ export default function Home() {
                   <div
                     key={s.id}
                     className={`item ${s.id === activeSession?.id ? "active" : ""}`}
-                    onClick={() => setActiveSession(s)}
+                    onClick={() => {
+                      setActiveSession(s);
+                      setView("main");
+                    }}
                   >
                     <MessageSquare size={14} />
                     <span className="truncate">{s.title || "Nouvelle session"}</span>
@@ -149,7 +166,9 @@ export default function Home() {
       </aside>
 
       <main className="main">
-        {activeSession ? (
+        {view === "ollama" ? (
+          <OllamaView />
+        ) : activeSession ? (
           <SessionView session={activeSession} />
         ) : (
           <div className="empty">

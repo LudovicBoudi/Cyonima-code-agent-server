@@ -140,6 +140,23 @@ export const api = {
 
   ollamaModels: () =>
     request<{ models: OllamaModel[]; default_model: string }>("/ollama/models/"),
+  pullModel: (name: string) =>
+    request<{ task_id?: string; model: string; status: string }>(
+      `/ollama/models/${name}/pull/`,
+      { method: "POST" },
+    ),
+  pullStatus: (taskId: string) =>
+    request<{
+      task_id: string;
+      model: string;
+      status: string;
+      message: string;
+      percent: number;
+      completed: number;
+      total: number;
+    }>(`/ollama/pulls/${taskId}/`),
+  deleteModel: (name: string) =>
+    request<{ deleted: string }>(`/ollama/models/${name}/`, { method: "DELETE" }),
 };
 
 export function wsUrl(sessionId: string): string {

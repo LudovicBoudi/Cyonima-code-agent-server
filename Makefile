@@ -25,6 +25,9 @@ frontend:
 migrate:
 	cd backend && python manage.py migrate
 
+worker:
+	cd backend && celery -A config worker -l info
+
 migrate-make:
 	cd backend && python manage.py makemigrations
 

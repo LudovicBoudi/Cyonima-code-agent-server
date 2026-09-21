@@ -79,7 +79,10 @@ class OllamaClient:
             async with c.stream(
                 "POST", f"{self.base_url}/api/pull", json={"name": name}
             ) as r:
-                r.raise_for_status()
+                if r.status_code != 200:
+                    if on_progress:
+                        await on_progress({"status": "error", "error": f"HTTP {r.status_code}"})
+                    return False
                 async for line in r.aiter_lines():
                     if not line.strip():
                         continue
