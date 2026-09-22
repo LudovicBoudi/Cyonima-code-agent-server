@@ -9,6 +9,18 @@ from apps.workspaces.models import Workspace
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def _no_docker(monkeypatch):
+    """Rend les tests hermétiques vis-à-vis de Docker (dispo ou non sur le runner).
+
+    Force le mode « dégradé » de la sandbox : les outils fichiers fonctionnent,
+    `bash`/`exec_command` lèvent `DockerUnavailable`.
+    """
+    from apps.workspaces import sandbox
+
+    monkeypatch.setattr(sandbox, "docker_available", lambda: False)
+
+
 @pytest.fixture
 def user(db):
     return User.objects.create_user(email="user@test.dev", password="pass12345")
