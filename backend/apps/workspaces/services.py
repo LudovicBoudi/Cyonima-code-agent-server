@@ -17,7 +17,7 @@ def provision_workspace(workspace):
         sandbox.start_container(workspace)
         workspace.status = Workspace.Status.READY
         workspace.save(update_fields=["status"])
-    except Exception as exc:
+    except Exception:
         logger.exception("Provision échouée pour %s", workspace)
         workspace.status = Workspace.Status.ERROR
         workspace.save(update_fields=["status"])

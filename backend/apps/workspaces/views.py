@@ -1,10 +1,9 @@
-from rest_framework import status, viewsets
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.organizations.models import Organization
-from apps.organizations.permissions import IsOrgAdmin, IsOrgMember, is_org_member
+from apps.organizations.permissions import IsOrgAdmin, IsOrgMember
 from apps.organizations.views import OrgScopedViewSetMixin
 
 from . import files, sandbox, services

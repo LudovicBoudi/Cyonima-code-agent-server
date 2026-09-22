@@ -9,6 +9,7 @@ import logging
 import os
 
 import docker
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,4 @@ def container_status(workspace):
 
 
 def settings_sandbox_image():
-    from django.conf import settings
-
     return settings.SANDBOX_IMAGE

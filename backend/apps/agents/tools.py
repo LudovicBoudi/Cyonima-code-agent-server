@@ -5,7 +5,7 @@
 - Chaque outil expose un schéma JSON (function-calling Ollama) et une fonction
   `run(workspace, args)`.
 """
-import glob as _glob
+import glob as _glob_module
 import os
 import re
 
@@ -56,7 +56,7 @@ def _glob(workspace, args):
     root = files.ensure_workspace_dir(workspace)
     pattern = args["pattern"].lstrip("/")
     matches = []
-    for p in _glob.glob(os.path.join(root, "**", pattern), recursive=True):
+    for p in _glob_module.glob(os.path.join(root, "**", pattern), recursive=True):
         if os.path.isfile(p):
             matches.append(os.path.relpath(p, root))
     return "\n".join(matches[:500]) or "(aucun résultat)"

@@ -44,7 +44,7 @@ class WorkspaceSerializer(serializers.ModelSerializer):
 
         try:
             provision_workspace_task.delay(str(workspace.id))
-        except Exception as exc:
+        except Exception:
             # Fallback synchrone (dev sans broker/worker)
             from .services import provision_workspace
 

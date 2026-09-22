@@ -106,6 +106,38 @@ La suite couvre l'auth, les organisations/RBAC, les workspaces, les sessions,
 la boucle agent (tool calls, reprise, approbations), l'orchestration Redis
 (via `fakeredis`), les tâches Celery et le client Ollama (mock HTTP).
 
+## Release & déploiement
+
+Un tag `v*` déclenche le workflow de release (`.github/workflows/release.yml`)
+qui construit et publie trois images sur **GitHub Container Registry**
+(`ghcr.io/<owner>/<repo>/<image>`), versionnées (`v1.2.3`, `1.2`, `latest`) :
+
+- **`backend`** — Django + daphne (API REST + WebSocket), statiques via whitenoise ;
+- **`frontend`** — nginx servant la SPA et proxy `/api` + `/ws` vers `backend` ;
+- **`sandbox`** — image d'exécution jetable (un conteneur par workspace).
+
+Référence de déploiement (remplacer `<image>` par vos images) :
+
+```yaml
+services:
+  db:         { image: postgres:16-alpine }
+  redis:      { image: redis:7-alpine }
+  ollama:     { image: ollama/ollama:latest }
+  backend:
+    image: ghcr.io/<owner>/<repo>/backend:latest
+    env_file: .env
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock", "./sandbox/workspaces:/sandbox/workspaces"]
+  worker:
+    image: ghcr.io/<owner>/<repo>/backend:latest
+    command: celery -A config worker -l info
+  agent-worker:
+    image: ghcr.io/<owner>/<repo>/backend:latest
+    command: celery -A config worker -Q agents -l info
+  frontend:
+    image: ghcr.io/<owner>/<repo>/frontend:latest
+    ports: ["80:80"]
+```
+
 ## Licence
 
 MIT — voir [`LICENSE`](LICENSE).

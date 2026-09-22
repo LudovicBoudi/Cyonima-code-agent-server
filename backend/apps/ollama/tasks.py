@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 def _aggregate(layers: dict) -> tuple[int, int, int]:
     """Retourne (percent, completed, total) agrégés sur toutes les couches."""
-    total = sum(l.get("total", 0) for l in layers.values())
-    completed = sum(l.get("completed", 0) for l in layers.values())
+    total = sum(layer.get("total", 0) for layer in layers.values())
+    completed = sum(layer.get("completed", 0) for layer in layers.values())
     percent = int(completed * 100 / total) if total else 0
     return percent, completed, total
 

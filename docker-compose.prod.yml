@@ -1,0 +1,114 @@
+# Déploiement production — utilise les images publiées sur GHCR.
+#
+# Configuration (dans `.env` ou l'environnement) :
+#   IMAGE_PREFIX=ghcr.io/<owner>/<repo>   # préfixe des images
+#   IMAGE_TAG=latest                       # tag (ex: v0.1.0)
+#   DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, POSTGRES_*, OLLAMA_*, SANDBOX_*
+#
+# Prérequis : `./sandbox/workspaces` possédé par l'UID/GID du backend
+# (`make sandbox-prep`), et l'image sandbox construite (`make sandbox-build`).
+
+x-backend-env: &backend-env
+  POSTGRES_HOST: db
+  REDIS_URL: redis://redis:6379/0
+  OLLAMA_BASE_URL: http://ollama:11434
+  SANDBOX_VOLUME_ROOT: /sandbox/workspaces
+  DJANGO_SETTINGS_MODULE: config.settings.prod
+  USE_SQLITE: "false"
+  USE_IN_MEMORY_CHANNEL: "false"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cyonima}
+      POSTGRES_USER: ${POSTGRES_USER:-cyonima}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cyonima}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cyonima}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+
+  migrate:
+    image: ${IMAGE_PREFIX}/backend:${IMAGE_TAG:-latest}
+    command: python manage.py migrate
+    restart: "no"
+    env_file: .env
+    environment: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    image: ${IMAGE_PREFIX}/backend:${IMAGE_TAG:-latest}
+    command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
+    env_file: .env
+    environment: *backend-env
+    user: "${SANDBOX_UID:-1000}:${SANDBOX_GID:-1000}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./sandbox/workspaces:/sandbox/workspaces
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
+  worker:
+    image: ${IMAGE_PREFIX}/backend:${IMAGE_TAG:-latest}
+    command: celery -A config worker -l info
+    env_file: .env
+    environment: *backend-env
+    user: "${SANDBOX_UID:-1000}:${SANDBOX_GID:-1000}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./sandbox/workspaces:/sandbox/workspaces
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  agent-worker:
+    image: ${IMAGE_PREFIX}/backend:${IMAGE_TAG:-latest}
+    command: celery -A config worker -Q agents --concurrency=4 -l info
+    env_file: .env
+    environment: *backend-env
+    user: "${SANDBOX_UID:-1000}:${SANDBOX_GID:-1000}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./sandbox/workspaces:/sandbox/workspaces
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: ${IMAGE_PREFIX}/frontend:${IMAGE_TAG:-latest}
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  ollama:

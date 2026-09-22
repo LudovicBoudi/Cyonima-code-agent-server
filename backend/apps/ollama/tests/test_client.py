@@ -44,7 +44,7 @@ def test_pull_success(monkeypatch):
     ]
 
     async def handler(request):
-        body = "\n".join(json.dumps(l) for l in lines)
+        body = "\n".join(json.dumps(line) for line in lines)
         return httpx.Response(200, content=body)
 
     transport = httpx.MockTransport(handler)
