@@ -46,6 +46,37 @@ class OllamaClient:
             r.raise_for_status()
             return r.json()
 
+    async def resolve_model(self, name: str) -> str:
+        """Retourne un modèle réellement disponible, le plus proche de `name`.
+
+        Priorité :
+          1. le modèle demandé s'il est installé (correspondance exacte),
+          2. le modèle par défaut configuré s'il est installé,
+          3. le premier modèle installé,
+          4. `name` en dernier recours.
+        """
+        if not name or not name.strip():
+            name = settings.OLLAMA_DEFAULT_MODEL or ""
+        try:
+            available = await self.list_models()
+        except Exception as exc:
+            logger.warning("Liste des modèles indisponible, retour de %s (%s)", name, exc)
+            return name
+        names = [m.get("name", "") for m in available if m.get("name")]
+        if name in names:
+            return name
+        if settings.OLLAMA_DEFAULT_MODEL in names:
+            return settings.OLLAMA_DEFAULT_MODEL
+        if names and name:
+            # tolérance : "qwen2.5-coder" ==> "qwen2.5-coder:7b"
+            base = name.split(":")[0]
+            for n in names:
+                if n.split(":")[0] == base:
+                    return n
+        if names:
+            return names[0]
+        return name
+
     async def capabilities(self, name: str) -> dict:
         """Retourne les capacités d'un modèle (tools, thinking, context)."""
         try:

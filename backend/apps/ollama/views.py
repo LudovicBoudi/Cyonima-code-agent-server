@@ -17,8 +17,12 @@ class OllamaModelsView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        models = async_to_sync(OllamaClient().list_models)()
-        return Response({"models": models, "default_model": settings.OLLAMA_DEFAULT_MODEL})
+        client = OllamaClient()
+        models = async_to_sync(client.list_models)()
+        default_model = async_to_sync(client.resolve_model)(
+            settings.OLLAMA_DEFAULT_MODEL
+        )
+        return Response({"models": models, "default_model": default_model})
 
 
 class OllamaModelDetailView(views.APIView):

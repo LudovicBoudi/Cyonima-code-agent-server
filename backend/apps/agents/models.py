@@ -29,6 +29,8 @@ class PermissionRequest(BaseModel):
 
     class Meta:
         ordering = ["created_at"]
+        verbose_name = "Demande d'approbation"
+        verbose_name_plural = "Demandes d'approbation"
 
     def __str__(self):
         return f"{self.tool} [{self.status}] ({self.session_id})"

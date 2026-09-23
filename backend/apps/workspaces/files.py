@@ -75,3 +75,53 @@ def git_status(workspace):
             continue
         changes.append({"status": line[:2].strip(), "path": line[3:]})
     return {"is_repo": True, "changes": changes}
+
+
+def is_within_roots(path, roots):
+    """True si `path` (resolu) est == à une racine ou dessous."""
+    return any(
+        path == root or (path + os.sep).startswith(root.rstrip(os.sep) + os.sep)
+        for root in roots
+    )
+
+
+def list_local_dirs(path=""):
+    """Liste les sous-dossiers d'un répertoire serveur autorisé (WORKSPACE_LOCAL_ROOTS).
+
+    Permet à l'utilisateur de choisir un dossier de travail local "comme le client
+    original", sans exposer tout le système de fichiers.
+    """
+    from django.conf import settings as s
+
+    roots = [
+        os.path.realpath(os.path.expanduser(r))
+        for r in s.WORKSPACE_LOCAL_ROOTS
+        if r.strip()
+    ]
+    if not roots:
+        raise PermissionError("Choix d'un dossier local désactivé (WORKSPACE_LOCAL_ROOTS vide).")
+
+    base = os.path.realpath(os.path.expanduser(path or roots[0]))
+    if not is_within_roots(base, roots):
+        raise PermissionError(f"Chemin hors des racines autorisées: {path}")
+    if not os.path.isdir(base):
+        raise NotADirectoryError(path)
+
+    dirs = []
+    for name in sorted(os.listdir(base)):
+        full = os.path.join(base, name)
+        if os.path.isdir(full) and not os.path.islink(full):
+            dirs.append({"name": name, "path": full})
+
+    parent = os.path.dirname(base)
+    if is_within_roots(parent, roots) and parent != base:
+        parent_path = parent
+    else:
+        parent_path = None
+
+    return {
+        "path": base,
+        "parent": parent_path,
+        "roots": roots,
+        "dirs": dirs,
+    }

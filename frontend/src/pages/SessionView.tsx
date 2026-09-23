@@ -49,7 +49,16 @@ export default function SessionView({ session }: { session: Session }) {
     api.history(session.id).then(setMessages);
     api.ollamaModels().then((r) => {
       setModels(r.models);
-      if (!model && r.default_model) setModel(r.default_model);
+      setModel((cur) => {
+        const inList = r.models.some((m) => m.name === (cur || ""));
+        if (inList) return cur;
+        const resolved =
+          r.models.find((m) => m.name === r.default_model)?.name ||
+          r.models[0]?.name ||
+          cur ||
+          "";
+        return resolved;
+      });
     });
     loadGitStatus();
     loadPendingPermissions();
@@ -236,7 +245,9 @@ export default function SessionView({ session }: { session: Session }) {
         <div className="chatbox">
           <div className="controls">
             <select value={model} onChange={(e) => setModel(e.target.value)}>
-              {models.length === 0 && <option value={model}>{model || "Modèle"}</option>}
+              {!models.some((m) => m.name === model) && (
+                <option value={model}>{model || "Modèle"}</option>
+              )}
               {models.map((m) => (
                 <option key={m.name} value={m.name}>{m.name}</option>
               ))}

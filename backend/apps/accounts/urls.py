@@ -1,7 +1,18 @@
 from django.urls import include, path
+from rest_framework.routers import SimpleRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .views import LoginView, MeView, RegisterView, SessionTokenView, SsoProvidersView
+from .views import (
+    AdminUsersViewSet,
+    LoginView,
+    MeView,
+    RegisterView,
+    SessionTokenView,
+    SsoProvidersView,
+)
+
+router = SimpleRouter()
+router.register("admin/users", AdminUsersViewSet, basename="admin-users")
 
 urlpatterns = [
     path("login/", LoginView.as_view(), name="login"),
@@ -12,4 +23,4 @@ urlpatterns = [
     path("sso/", SsoProvidersView.as_view(), name="sso-providers"),
     # SSO (OIDC/SAML) via allauth (flux redirect classique)
     path("accounts/", include("allauth.urls")),
-]
+] + router.urls

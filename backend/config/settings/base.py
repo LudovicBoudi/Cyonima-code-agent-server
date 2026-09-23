@@ -1,4 +1,5 @@
 """Django settings de base — communes à tous les environnements."""
+import os
 from pathlib import Path
 
 import environ
@@ -32,6 +33,7 @@ env = environ.Env(
     CORS_ALLOWED_ORIGINS=(list, ["http://localhost:5173"]),
     USE_SQLITE=(bool, False),
     USE_IN_MEMORY_CHANNEL=(bool, False),
+    WORKSPACE_LOCAL_ROOTS=(list, [str(Path.home())]),
 )
 
 environ.Env.read_env(BASE_DIR.parent / ".env")
@@ -267,6 +269,14 @@ SANDBOX_PIDS_LIMIT = env("SANDBOX_PIDS_LIMIT")
 SANDBOX_READ_ONLY = env("SANDBOX_READ_ONLY")
 SANDBOX_TMPFS_SIZE = env("SANDBOX_TMPFS_SIZE")
 
+# Racines autorisées pour le choix d'un dossier de travail local
+# (navigation des répertoires côté serveur). Vide pour désactiver.
+WORKSPACE_LOCAL_ROOTS = [
+    os.path.realpath(os.path.expanduser(root))
+    for root in env("WORKSPACE_LOCAL_ROOTS")
+    if root.strip()
+]
+
 # ---------------------------------------------------------------------------
 # Internationalisation / fuseaux
 # ---------------------------------------------------------------------------
@@ -288,6 +298,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # CORS
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
+
+# CSRF : le frontend (Vite) proxifie l'admin Django ; il faut donc approuver
+# son origine pour que les formulaires de l'admin (POST) passent le check.
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(["http://localhost:5173", FRONTEND_URL]))
 
 # drf-spectacular
 SPECTACULAR_SETTINGS = {

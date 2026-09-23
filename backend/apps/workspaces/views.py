@@ -21,6 +21,19 @@ class WorkspaceViewSet(OrgScopedViewSetMixin, viewsets.ModelViewSet):
         # Un membre ne voit que les workspaces de son équipe (ou non restreints)
         return qs
 
+    @action(detail=False, methods=["get"])
+    def local_dirs(self, request, org_pk=None):
+        """Parcourez les dossiers serveur autorisés (choix du dossier de travail)."""
+        from rest_framework.exceptions import ValidationError
+
+        path = request.query_params.get("path", "")
+        try:
+            return Response(files.list_local_dirs(path))
+        except PermissionError as exc:
+            raise ValidationError({"path": str(exc)})
+        except (OSError, NotADirectoryError):
+            raise ValidationError({"path": "Dossier inaccessible."})
+
     def get_permissions(self):
         if self.action in ("create", "update", "partial_update", "destroy"):
             return [IsAuthenticated(), IsOrgAdmin()]

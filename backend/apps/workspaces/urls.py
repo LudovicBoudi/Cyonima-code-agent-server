@@ -9,6 +9,11 @@ urlpatterns = [
         name="workspace-list",
     ),
     path(
+        "<uuid:org_pk>/workspaces/local_dirs/",
+        WorkspaceViewSet.as_view({"get": "local_dirs"}),
+        name="workspace-local-dirs",
+    ),
+    path(
         "<uuid:org_pk>/workspaces/<uuid:pk>/",
         WorkspaceViewSet.as_view(
             {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}

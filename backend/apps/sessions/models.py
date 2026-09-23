@@ -24,6 +24,11 @@ class Session(BaseModel):
     model = models.CharField(max_length=255, blank=True)
     reasoning = models.CharField(max_length=16, default="auto")
 
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Session"
+        verbose_name_plural = "Sessions"
+
     def __str__(self):
         return f"{self.title or self.id} ({self.workspace})"
 
@@ -47,6 +52,8 @@ class Message(BaseModel):
 
     class Meta:
         ordering = ["created_at"]
+        verbose_name = "Message"
+        verbose_name_plural = "Messages"
 
     def __str__(self):
         return f"{self.role}: {self.content[:40]}"

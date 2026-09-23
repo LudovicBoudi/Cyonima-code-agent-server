@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
@@ -11,6 +13,8 @@ from apps.workspaces.models import Workspace
 
 from .models import Message, Session
 from .serializers import MessageSerializer, PermissionRequestSerializer, SessionSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class SessionViewSet(viewsets.ModelViewSet):
@@ -32,10 +36,18 @@ class SessionViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("Accès au workspace refusé.")
+        from asgiref.sync import async_to_sync
+        from apps.ollama.client import OllamaClient
+
+        model = serializer.validated_data.get("model", "") or settings.OLLAMA_DEFAULT_MODEL
+        try:
+            model = async_to_sync(OllamaClient().resolve_model)(model)
+        except Exception:
+            logger.warning("Résolution du modèle par défaut impossible", exc_info=True)
         serializer.save(
             user=self.request.user,
             workspace=workspace,
-            model=serializer.validated_data.get("model", "") or settings.OLLAMA_DEFAULT_MODEL,
+            model=model,
         )
 
     @action(detail=True, methods=["get"])

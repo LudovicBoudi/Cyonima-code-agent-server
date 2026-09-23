@@ -2,6 +2,7 @@ export interface User {
   id: number | string;
   email: string;
   name: string;
+  is_staff?: boolean;
 }
 
 export interface Organization {
@@ -17,6 +18,7 @@ export interface Workspace {
   name: string;
   slug: string;
   status: string;
+  local_path?: string;
   container_status?: string;
 }
 
@@ -59,6 +61,17 @@ export interface PermissionRequest {
   created_at: string;
 }
 
+export interface AdminUser {
+  id: number | string;
+  email: string;
+  name: string;
+  is_active: boolean;
+  is_staff: boolean;
+  is_superuser: boolean;
+  date_joined: string;
+  last_login?: string | null;
+}
+
 const TOKEN_KEY = "cyonima.token";
 const REFRESH_KEY = "cyonima.refresh";
 
@@ -89,11 +102,33 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
     throw new Error("Non authentifié");
   }
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(body || res.statusText);
+    let message = `Erreur ${res.status}`;
+    try {
+      const body = await res.json();
+      const parsed = drfError(body);
+      if (parsed) message = parsed;
+    } catch {
+      /* corps non-JSON */
+    }
+    throw new Error(message);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+function drfError(body: any): string | null {
+  if (typeof body === "string") return body;
+  if (Array.isArray(body)) return body.join(", ");
+  if (body && typeof body === "object") {
+    const parts: string[] = [];
+    for (const [key, value] of Object.entries(body)) {
+      if (Array.isArray(value)) parts.push(`${key}: ${value.join(", ")}`);
+      else if (typeof value === "string") parts.push(`${key}: ${value}`);
+      else parts.push(key);
+    }
+    return parts.join("; ");
+  }
+  return null;
 }
 
 function listResult<T>(data: any): T[] {
@@ -127,10 +162,28 @@ export const api = {
 
   workspaces: async (orgId: string) =>
     listResult<Workspace>(await request(`/orgs/${orgId}/workspaces/`)),
-  createWorkspace: (orgId: string, name: string, slug: string, gitUrl?: string) =>
+  localDirs: (orgId: string, path?: string) =>
+    request<{
+      path: string;
+      parent: string | null;
+      roots: string[];
+      dirs: { name: string; path: string }[];
+    }>(`/orgs/${orgId}/workspaces/local_dirs/${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+  createWorkspace: (
+    orgId: string,
+    name: string,
+    slug: string,
+    gitUrl?: string,
+    localPath?: string,
+  ) =>
     request<Workspace>(`/orgs/${orgId}/workspaces/`, {
       method: "POST",
-      body: JSON.stringify({ name, slug, git_url: gitUrl || "" }),
+      body: JSON.stringify({
+        name,
+        slug,
+        git_url: gitUrl || "",
+        local_path: localPath || "",
+      }),
     }),
 
   sessions: async (workspaceId?: string) =>
@@ -178,6 +231,27 @@ export const api = {
     }>(`/ollama/pulls/${taskId}/`),
   deleteModel: (name: string) =>
     request<{ deleted: string }>(`/ollama/models/${name}/`, { method: "DELETE" }),
+
+  adminUsers: async () =>
+    listResult<AdminUser>(await request("/auth/admin/users/")),
+  adminCreateUser: (data: {
+    email: string;
+    name: string;
+    password: string;
+    is_staff?: boolean;
+    is_active?: boolean;
+  }) =>
+    request<AdminUser>("/auth/admin/users/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  adminUpdateUser: (id: string, data: Partial<AdminUser & { password: string }>) =>
+    request<AdminUser>(`/auth/admin/users/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  adminDeleteUser: (id: string) =>
+    request<void>(`/auth/admin/users/${id}/`, { method: "DELETE" }),
 };
 
 export function wsUrl(sessionId: string): string {

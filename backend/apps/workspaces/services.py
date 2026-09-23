@@ -12,7 +12,7 @@ def provision_workspace(workspace):
 
     try:
         host_path = sandbox.ensure_workspace_dir(workspace)
-        if workspace.git_url:
+        if workspace.git_url and not workspace.local_path:
             clone(host_path, workspace.git_url)
         sandbox.start_container(workspace)
         workspace.status = Workspace.Status.READY

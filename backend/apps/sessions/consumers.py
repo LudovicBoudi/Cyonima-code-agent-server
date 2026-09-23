@@ -29,7 +29,7 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
     """
 
     async def connect(self):
-        self.session_id = self.scope["url_route"]["kwargs"]["session_id"]
+        self.session_id = str(self.scope["url_route"]["kwargs"]["session_id"])
         self.user = self.scope.get("user")
 
         if not self.user or not self.user.is_authenticated:
@@ -64,6 +64,19 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
             return
 
         model = content.get("model") or self.session.model or settings.OLLAMA_DEFAULT_MODEL
+
+        from apps.ollama.client import OllamaClient
+
+        try:
+            model = await OllamaClient().resolve_model(model)
+        except Exception as exc:
+            logger.warning("Résolution du modèle impossible: %s", exc)
+        if not model:
+            await self.send_json(
+                {"type": "error", "error": "Aucun modèle Ollama disponible."}
+            )
+            return
+
         reasoning = content.get("reasoning", "auto")
         self.session.model = model
         self.session.reasoning = reasoning

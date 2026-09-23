@@ -22,6 +22,7 @@ import time
 import uuid
 from typing import Awaitable, Callable
 
+import httpx
 from asgiref.sync import sync_to_async
 
 from apps.ollama.client import OllamaClient
@@ -208,17 +209,33 @@ async def run_agent(
         tool_calls_raw: list[dict] = []
         usage: dict = {}
 
-        async for chunk in client.chat_stream(messages, model, tool_schemas, reasoning):
-            if await cancel_check():
-                break
-            if chunk.content:
-                assistant_content += chunk.content
-                await emit({"type": "token", "token": chunk.content})
-            if chunk.thinking:
-                await emit({"type": "thinking", "token": chunk.thinking})
-            tool_calls_raw.extend(chunk.tool_calls)
-            if chunk.done:
-                usage = chunk.usage
+        try:
+            async for chunk in client.chat_stream(messages, model, tool_schemas, reasoning):
+                if await cancel_check():
+                    break
+                if chunk.content:
+                    assistant_content += chunk.content
+                    await emit({"type": "token", "token": chunk.content})
+                if chunk.thinking:
+                    await emit({"type": "thinking", "token": chunk.thinking})
+                tool_calls_raw.extend(chunk.tool_calls)
+                if chunk.done:
+                    usage = chunk.usage
+        except httpx.HTTPStatusError as exc:
+            detail = ""
+            if exc.response is not None:
+                try:
+                    detail = exc.response.json().get("error", "")
+                except Exception:
+                    detail = ""
+            if detail:
+                detail = f" — {detail}"
+            logger.warning(
+                "Erreur Ollama (%s) session %s: %s", exc.response.status_code if exc.response else "?", session_id, detail
+            )
+            await emit({"type": "error", "error": str(exc) + detail})
+            await emit({"type": "done", "usage": {}})
+            return
 
         if await cancel_check():
             await emit({"type": "done", "cancelled": True, "usage": {}})

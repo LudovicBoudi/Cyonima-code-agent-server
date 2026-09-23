@@ -18,6 +18,8 @@ class Organization(BaseModel):
 
     class Meta:
         ordering = ["name"]
+        verbose_name = "Organisation"
+        verbose_name_plural = "Organisations"
 
     def __str__(self):
         return self.name
@@ -45,6 +47,8 @@ class Membership(BaseModel):
                 fields=["organization", "user"], name="unique_org_membership"
             )
         ]
+        verbose_name = "Membre"
+        verbose_name_plural = "Membres"
 
     def __str__(self):
         return f"{self.user} @ {self.organization} ({self.role})"
@@ -62,6 +66,8 @@ class Team(BaseModel):
         constraints = [
             models.UniqueConstraint(fields=["organization", "name"], name="unique_org_team")
         ]
+        verbose_name = "Équipe"
+        verbose_name_plural = "Équipes"
 
     def __str__(self):
         return f"{self.organization} / {self.name}"
@@ -84,6 +90,8 @@ class TeamMembership(BaseModel):
         constraints = [
             models.UniqueConstraint(fields=["team", "user"], name="unique_team_membership")
         ]
+        verbose_name = "Membre d'équipe"
+        verbose_name_plural = "Membres d'équipe"
 
     def __str__(self):
         return f"{self.user} @ {self.team} ({self.role})"

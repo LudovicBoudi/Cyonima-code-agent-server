@@ -71,3 +71,34 @@ def test_pull_http_error_returns_false(monkeypatch):
 
     ok = asyncio.run(client.pull("nope"))
     assert ok is False
+
+
+def test_resolve_model_falls_back_to_installed(monkeypatch):
+    client = OllamaClient(base_url="http://x")
+
+    async def fake_list():
+        return [{"name": "ornith:9b"}, {"name": "qwen2.5-coder:7b"}]
+
+    monkeypatch.setattr(client, "list_models", fake_list)
+    # modèle demandé non installé -> tombe sur le défaut installé
+    assert asyncio.run(client.resolve_model("llama3:8b")) == "qwen2.5-coder:7b"
+
+
+def test_resolve_model_matches_without_tag(monkeypatch):
+    client = OllamaClient(base_url="http://x")
+
+    async def fake_list():
+        return [{"name": "qwen2.5-coder:7b"}]
+
+    monkeypatch.setattr(client, "list_models", fake_list)
+    assert asyncio.run(client.resolve_model("qwen2.5-coder")) == "qwen2.5-coder:7b"
+
+
+def test_resolve_model_first_available(monkeypatch):
+    client = OllamaClient(base_url="http://x")
+
+    async def fake_list():
+        return [{"name": "ornith:9b"}]
+
+    monkeypatch.setattr(client, "list_models", fake_list)
+    assert asyncio.run(client.resolve_model("")) == "ornith:9b"

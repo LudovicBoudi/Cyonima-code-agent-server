@@ -29,6 +29,11 @@ class Workspace(BaseModel):
     slug = models.SlugField(max_length=255)
     description = models.TextField(blank=True)
     git_url = models.URLField(blank=True)
+    local_path = models.CharField(
+        max_length=1024,
+        blank=True,
+        help_text="Chemin local (sur le serveur) d'un dossier existant à utiliser comme workspace.",
+    )
     container_image = models.CharField(max_length=255, blank=True)
     container_id = models.CharField(max_length=128, blank=True)
     allow_network = models.BooleanField(
@@ -52,13 +57,21 @@ class Workspace(BaseModel):
             )
         ]
         ordering = ["name"]
+        verbose_name = "Workspace"
+        verbose_name_plural = "Workspaces"
 
     def __str__(self):
         return f"{self.organization} / {self.name}"
 
     @property
     def host_path(self):
-        """Chemin hôte du volume monté dans le conteneur."""
+        """Chemin hôte du volume monté dans le conteneur.
+
+        Un `local_path` (dossier local existant) a priorité sur le chemin
+        sandbox généré.
+        """
         from django.conf import settings as s
 
+        if self.local_path:
+            return self.local_path
         return f"{s.SANDBOX_VOLUME_ROOT}/{self.organization_id}/{self.id}"
