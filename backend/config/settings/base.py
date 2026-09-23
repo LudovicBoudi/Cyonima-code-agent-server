@@ -34,6 +34,7 @@ env = environ.Env(
     USE_SQLITE=(bool, False),
     USE_IN_MEMORY_CHANNEL=(bool, False),
     WORKSPACE_LOCAL_ROOTS=(list, [str(Path.home())]),
+    WORKSPACE_EXTERNAL_ROOTS=(list, ["/tmp"]),
 )
 
 environ.Env.read_env(BASE_DIR.parent / ".env")
@@ -276,6 +277,14 @@ WORKSPACE_LOCAL_ROOTS = [
     for root in env("WORKSPACE_LOCAL_ROOTS")
     if root.strip()
 ]
+
+# Racines externes au workspace où l'agent peut lire/écrire (ex. `/tmp`) —
+# toujours APRÈS approbation utilisateur. Défaut: `/tmp` seulement.
+WORKSPACE_EXTERNAL_ROOTS = [
+    os.path.realpath(os.path.expanduser(root))
+    for root in env("WORKSPACE_EXTERNAL_ROOTS")
+    if root.strip()
+] or ["/tmp"]
 
 # ---------------------------------------------------------------------------
 # Internationalisation / fuseaux

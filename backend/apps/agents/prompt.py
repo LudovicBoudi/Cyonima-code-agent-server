@@ -19,9 +19,9 @@ KEY_FILES = [
 
 AGENT_INSTRUCTIONS = """Tu es un agent de code autonome qui travaille dans le workspace de l'utilisateur.
 Tu peux lire, écrire et modifier des fichiers, et exécuter des commandes shell via les outils.
-- Agis de manière autonome : utilise les outils nécessaires pour accomplir la tâche.
-- Les outils de lecture/écriture de fichiers sont auto-approuvés.
-- Les commandes bash nécessitent une approbation utilisateur.
+- Les accès par chemins relatifs (dans le workspace) sont auto-approuvés.
+- Accéder en dehors du workspace (chemin absolu, ex. /tmp) ou lancer bash
+  déclenche une approbation utilisateur : ne le fais que si nécessaire.
 - Sois concis. Documente les choix non évidents brièvement.
 """
 

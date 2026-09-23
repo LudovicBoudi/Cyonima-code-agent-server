@@ -175,6 +175,8 @@ class OllamaClient:
                         continue
 
                     chunk = ChatChunk()
+                    if data.get("error"):
+                        raise RuntimeError(f"Ollama: {data['error']}")
                     msg = data.get("message") or {}
                     if msg.get("content"):
                         chunk.content = msg["content"]

@@ -4,14 +4,15 @@ from apps.accounts.models import User
 
 
 @pytest.mark.django_db
-def test_register_creates_user(api_client):
+def test_register_disabled(api_client):
+    """L'inscription publique est fermée : seuls les admins créent des comptes."""
     r = api_client.post(
         "/api/auth/register/",
         {"email": "new@test.dev", "name": "New", "password": "pass12345"},
         format="json",
     )
-    assert r.status_code == 201
-    assert User.objects.filter(email="new@test.dev").exists()
+    assert r.status_code == 404
+    assert not User.objects.filter(email="new@test.dev").exists()
 
 
 @pytest.mark.django_db

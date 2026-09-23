@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from rest_framework import generics, permissions, status, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -12,7 +12,6 @@ from .serializers import (
     AdminUserSerializer,
     CreateUserSerializer,
     EmailTokenObtainPairSerializer,
-    RegisterSerializer,
     UserSerializer,
 )
 
@@ -21,17 +20,6 @@ User = get_user_model()
 
 class LoginView(TokenObtainPairView):
     serializer_class = EmailTokenObtainPairSerializer
-
-
-class RegisterView(generics.CreateAPIView):
-    permission_classes = [permissions.AllowAny]
-    serializer_class = RegisterSerializer
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
 class MeView(APIView):

@@ -200,23 +200,22 @@ async def run_agent(
     policy = DEFAULT_POLICY
     tool_schemas = [t.schema() for t in TOOLS]
 
-    for _ in range(MAX_TOOL_ITERATIONS):
-        if await cancel_check():
-            await emit({"type": "done", "cancelled": True, "usage": {}})
-            return
-
+    async def generate(reasoning_mode: str):
         assistant_content = ""
         tool_calls_raw: list[dict] = []
         usage: dict = {}
-
+        saw_thinking = False
         try:
-            async for chunk in client.chat_stream(messages, model, tool_schemas, reasoning):
+            async for chunk in client.chat_stream(
+                messages, model, tool_schemas, reasoning_mode
+            ):
                 if await cancel_check():
                     break
                 if chunk.content:
                     assistant_content += chunk.content
                     await emit({"type": "token", "token": chunk.content})
                 if chunk.thinking:
+                    saw_thinking = True
                     await emit({"type": "thinking", "token": chunk.thinking})
                 tool_calls_raw.extend(chunk.tool_calls)
                 if chunk.done:
@@ -234,6 +233,56 @@ async def run_agent(
                 "Erreur Ollama (%s) session %s: %s", exc.response.status_code if exc.response else "?", session_id, detail
             )
             await emit({"type": "error", "error": str(exc) + detail})
+            await emit({"type": "done", "usage": {}})
+            return None, None, None, False
+        except RuntimeError as exc:
+            logger.warning("Erreur Ollama (stream) session %s: %s", session_id, exc)
+            await emit({"type": "error", "error": str(exc)})
+            await emit({"type": "done", "usage": {}})
+            return None, None, None, False
+        return assistant_content, tool_calls_raw, usage, saw_thinking
+
+    for _ in range(MAX_TOOL_ITERATIONS):
+        if await cancel_check():
+            await emit({"type": "done", "cancelled": True, "usage": {}})
+            return
+
+        reasoning_mode = reasoning
+        for attempt in range(2):
+            (
+                assistant_content,
+                tool_calls_raw,
+                usage,
+                saw_thinking,
+            ) = await generate(reasoning_mode)
+            if assistant_content is None:
+                return  # erreur déjà émise
+            # Un modèle thinking peut "réfléchir" puis terminer sans émettre de
+            # contenu ni de tool call : on relance sans thinking.
+            if (
+                not assistant_content
+                and not tool_calls_raw
+                and saw_thinking
+                and reasoning_mode and reasoning_mode != "off"
+            ):
+                reasoning_mode = "off"
+                continue
+            break
+
+        # Un modèle thinking a pu "réfléchir" puis s'arrêter sans produire
+        # quoi que ce soit, même après relance sans thinking : on ne persist pas
+        # un message assistant vide, on signale l'échec.
+        if not assistant_content and not tool_calls_raw:
+            logger.warning(
+                "Modèle %s: réponse vide sur la session %s (thinking=%s)",
+                model, session_id, saw_thinking,
+            )
+            await emit(
+                {
+                    "type": "error",
+                    "error": "Le modèle n'a produit aucune réponse.",
+                }
+            )
             await emit({"type": "done", "usage": {}})
             return
 
@@ -259,7 +308,7 @@ async def run_agent(
             )
 
             for tc in merged:
-                decision = policy.decision(tc["name"])
+                decision = policy.decision(tc["name"], tc["arguments"])
 
                 if decision == "auto":
                     approved = True

@@ -15,6 +15,43 @@ def resolve_workspace_path(workspace, rel_path):
     return full
 
 
+def resolve_external_path(path):
+    """Résout un chemin absolu autorisé (WORKSPACE_EXTERNAL_ROOTS, ex. /tmp)."""
+    from django.conf import settings as s
+
+    roots = [
+        os.path.realpath(os.path.expanduser(r))
+        for r in s.WORKSPACE_EXTERNAL_ROOTS
+        if r.strip()
+    ]
+    full = os.path.realpath(os.path.expanduser(path))
+    if not is_within_roots(full, roots):
+        raise PermissionError(f"Chemin externe non autorisé: {path}")
+    return full
+
+
+def resolve_tool_path(workspace, path):
+    """Résout un chemin d'outil : relatif → workspace, absolu → racine externe.
+
+    Le contrôle d'approbation (hors workspace ⇒ ask) est assuré par la politique
+    de permissions AVANT l'appel ; ici on garantit uniquement le confinement.
+    """
+    if (path or "").startswith(os.sep):
+        return resolve_external_path(path)
+    return resolve_workspace_path(workspace, path)
+
+
+SCOPE_IN = "workspace"
+SCOPE_OUT = "external"
+
+
+def tool_path_scope(workspace, path):
+    """Catégorise un chemin d'outil (workspace / external) pour l'approbation."""
+    if (path or "").startswith(os.sep):
+        return SCOPE_OUT
+    return SCOPE_IN
+
+
 def list_dir(workspace, rel_path=""):
     full = resolve_workspace_path(workspace, rel_path)
     if not os.path.isdir(full):
@@ -41,8 +78,22 @@ def read_file(workspace, rel_path):
         return f.read()
 
 
+def read_file_abs(full):
+    if not os.path.isfile(full):
+        raise FileNotFoundError(full)
+    with open(full, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
 def write_file(workspace, rel_path, content):
     full = resolve_workspace_path(workspace, rel_path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w", encoding="utf-8") as f:
+        f.write(content)
+    return full
+
+
+def write_file_abs(full, content):
     os.makedirs(os.path.dirname(full), exist_ok=True)
     with open(full, "w", encoding="utf-8") as f:
         f.write(content)

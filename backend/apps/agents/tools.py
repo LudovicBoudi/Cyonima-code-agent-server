@@ -31,25 +31,27 @@ class Tool:
 
 
 def _read_file(workspace, args):
-    return files.read_file(workspace, args["path"])
+    path = files.resolve_tool_path(workspace, args["path"])
+    return files.read_file_abs(path)
 
 
 def _write_file(workspace, args):
-    files.write_file(workspace, args["path"], args["content"])
+    path = files.resolve_tool_path(workspace, args["path"])
+    files.write_file_abs(path, args["content"])
     return f"Fichier écrit : {args['path']}"
 
 
 def _edit_file(workspace, args):
-    path = args["path"]
+    path = files.resolve_tool_path(workspace, args["path"])
     old = args["old_string"]
     new = args["new_string"]
-    content = files.read_file(workspace, path)
+    content = files.read_file_abs(path)
     if old not in content:
         raise ValueError("old_string introuvable dans le fichier")
     if content.count(old) != 1:
         raise ValueError("old_string présent plusieurs fois, remplacement ambigu")
-    files.write_file(workspace, path, content.replace(old, new))
-    return f"Fichier modifié : {path}"
+    files.write_file_abs(path, content.replace(old, new))
+    return f"Fichier modifié : {args['path']}"
 
 
 def _glob(workspace, args):

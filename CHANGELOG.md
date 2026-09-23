@@ -8,6 +8,23 @@ versionnage [SemVer](https://semver.org/lang/fr/).
 
 ### Modifié
 
+- **Modèles thinking qui « s'arrêtent »** (ex. `ornith-1.5:9b`) : lorsqu'un tour
+  ne produit que du raisonnement interne puis se termine sans contenu ni appel
+  d'outil, l'agent relance automatiquement la génération sans mode thinking. Si
+  la réponse reste vide, un message clair est renvoyé au lieu d'un message
+  assistant vide.
+- **Permissions par chemin** : la lecture/écriture de fichiers **dans** le
+  répertoire de travail est auto-approuvée (aucune interaction). Tout accès
+  **hors** du workspace (chemin absolu, ex. `/tmp`) déclenche une approbation ;
+  ces accès sont confinés aux racines externes autorisées
+  (`WORKSPACE_EXTERNAL_ROOTS`, défaut `/tmp`). `bash` reste systématiquement
+  soumis à approbation.
+- **Bouton arrêter** : en développement, le canal WS utilise
+  `InMemoryChannelLayer` par défaut (Redis facultatif) — l'annulation du
+  raisonnement en cours atteint bien le client.
+- **Inscription publique fermée** : plus de création de compte sur la page de
+  connexion ; seuls les admins créent des comptes depuis l'application
+  (`/api/auth/admin/users/`).
 - **Création de session à la manière de l'app desktop** : plus d'organisations
   ou workspaces dans l'interface. L'utilisateur se connecte, crée une session en
   donnant un **nom de projet** et en choisissant un **dossier de travail local**

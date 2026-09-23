@@ -143,11 +143,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
-  register: (email: string, name: string, password: string) =>
-    request<User>("/auth/register/", {
-      method: "POST",
-      body: JSON.stringify({ email, name, password }),
-    }),
   me: () => request<User>("/auth/me/"),
   ssoProviders: () =>
     request<{ providers: { id: string; name: string; login_url: string }[] }>(
