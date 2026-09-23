@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    OllamaCatalogView,
     OllamaModelDetailView,
     OllamaModelsView,
     OllamaPullStatusView,
@@ -12,4 +13,5 @@ urlpatterns = [
     path("models/<str:name>/pull/", OllamaPullView.as_view(), name="ollama-pull"),
     path("models/<str:name>/", OllamaModelDetailView.as_view(), name="ollama-model-detail"),
     path("pulls/<str:task_id>/", OllamaPullStatusView.as_view(), name="ollama-pull-status"),
+    path("catalog/", OllamaCatalogView.as_view(), name="ollama-catalog"),
 ]

@@ -6,6 +6,7 @@ from rest_framework import status, views
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .catalog import catalog_models
 from .client import OllamaClient
 from .progress import get_progress
 from .tasks import pull_model_task
@@ -23,6 +24,32 @@ class OllamaModelsView(views.APIView):
             settings.OLLAMA_DEFAULT_MODEL
         )
         return Response({"models": models, "default_model": default_model})
+
+
+class OllamaCatalogView(views.APIView):
+    """Catalogue de modèles proposés par défaut (même sélection que le client
+    lourd). Marque chaque entrée `installed` si son tag Ollama est déjà présent
+    sur l'instance Ollama. Si Ollama est injoignable, le catalogue reste
+    consultable (aucune entrée marquée installée)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        client = OllamaClient()
+        try:
+            installed = async_to_sync(client.list_models)()
+            installed_tags = {
+                m.get("name", "") for m in installed if m.get("name")
+            }
+        except Exception as exc:
+            logger.warning("Ollama injoignable, catalogue sans statut installé (%s)", exc)
+            installed_tags = set()
+        catalog = []
+        for entry in catalog_models():
+            item = dict(entry)
+            item["installed"] = item["ollama_tag"] in installed_tags
+            catalog.append(item)
+        return Response({"catalog": catalog, "total": len(catalog)})
 
 
 class OllamaModelDetailView(views.APIView):

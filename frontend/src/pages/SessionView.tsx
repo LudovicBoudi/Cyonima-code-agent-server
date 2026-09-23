@@ -27,6 +27,15 @@ interface PermissionRequest {
   status?: string;
 }
 
+function panelNearBottom(el: HTMLDivElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+}
+
+function scrollToPanelBottom(el: HTMLDivElement, instant: boolean) {
+  if (instant) el.scrollTop = el.scrollHeight;
+  else el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+}
+
 const REASONING_OPTIONS = ["auto", "off", "low", "medium", "high"];
 
 export default function SessionView({ session }: { session: Session }) {
@@ -44,8 +53,13 @@ export default function SessionView({ session }: { session: Session }) {
   const localPath = session.local_path || "";
 
   const wsRef = useRef<WebSocket | null>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const thinkingRef = useRef<HTMLDivElement>(null);
+  const filesRef = useRef<HTMLDivElement>(null);
+  const stickChat = useRef(true);
+  const stickThinking = useRef(true);
+  const stickFiles = useRef(true);
 
   useEffect(() => {
     api.history(session.id).then(setMessages);
@@ -87,13 +101,39 @@ export default function SessionView({ session }: { session: Session }) {
     }
   }
 
+  function onMessagesScroll() {
+    const el = messagesRef.current;
+    if (!el) return;
+    stickChat.current = panelNearBottom(el);
+  }
+
+  function onThinkingScroll() {
+    const el = thinkingRef.current;
+    if (!el) return;
+    stickThinking.current = panelNearBottom(el);
+  }
+
+  function onFilesScroll() {
+    const el = filesRef.current;
+    if (!el) return;
+    stickFiles.current = panelNearBottom(el);
+  }
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesRef.current;
+    if (!el || !stickChat.current) return;
+    scrollToPanelBottom(el, !!stream);
   }, [messages, stream]);
 
   useEffect(() => {
-    thinkingRef.current?.scrollTo(0, thinkingRef.current.scrollHeight);
+    const el = thinkingRef.current;
+    if (el && stickThinking.current) scrollToPanelBottom(el, true);
   }, [stream?.thinking]);
+
+  useEffect(() => {
+    const el = filesRef.current;
+    if (el && stickFiles.current) scrollToPanelBottom(el, true);
+  }, [files]);
 
   async function loadGitStatus() {
     try {
@@ -187,7 +227,7 @@ export default function SessionView({ session }: { session: Session }) {
   return (
     <div className="session">
       <div className="col-chat">
-        <div className="messages">
+        <div className="messages" ref={messagesRef} onScroll={onMessagesScroll}>
           {messages.map((m) => (
             <div key={m.id} className={`msg ${m.role}`}>
               <div className="role">{m.role}</div>
@@ -293,7 +333,7 @@ export default function SessionView({ session }: { session: Session }) {
 
       <div className="col-thinking">
         <div className="panel-title">Raisonnement</div>
-        <div className="panel-body" ref={thinkingRef}>
+        <div className="panel-body" ref={thinkingRef} onScroll={onThinkingScroll}>
           {stream?.thinking ? (
             <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 12, margin: 0 }}>
               {stream.thinking}
@@ -308,7 +348,7 @@ export default function SessionView({ session }: { session: Session }) {
 
       <div className="col-files">
         <div className="panel-title">Fichiers</div>
-        <div className="panel-body">
+        <div className="panel-body" ref={filesRef} onScroll={onFilesScroll}>
           <div style={{ color: "var(--color-muted)", fontSize: 12.5, marginBottom: 8 }}>
             Workspace : <b>{workspaceName}</b>
             {localPath && (

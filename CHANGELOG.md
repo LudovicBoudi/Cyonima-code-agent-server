@@ -6,8 +6,22 @@ versionnage [SemVer](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+### Ajouté
+
+- **Catalogue de modèles** intégré à la page « Modèles Ollama » : même sélection
+  de modèles recommandés que le client lourd (`qwen3`, `ornith-1.5`, `gemma4`,
+  `granite4.2`…), avec filtrage, statut installé et bouton d'installation via
+  `ollama pull` (`GET /api/ollama/catalog/`).
+
 ### Modifié
 
+- **Session d'authentification plus longue** : le JWT d'accès passe de 5 min à
+  12 h, le refresh à 7 jours avec rotation automatique. Le frontend renouvelle
+  le token à la volée via `/api/auth/refresh/` lorsqu'une requête retourne 401,
+  au lieu de déconnecter immédiatement.
+- **Auto-scroll des sessions** : le fil de conversation ne défile plus de force
+  si l'utilisateur remonte lire un message ; il ne suit le bas que lorsqu'on y
+  est déjà, avec un défilement instantané pendant le streaming.
 - **Modèles thinking qui « s'arrêtent »** (ex. `ornith-1.5:9b`) : lorsqu'un tour
   ne produit que du raisonnement interne puis se termine sans contenu ni appel
   d'outil, l'agent relance automatiquement la génération sans mode thinking. Si

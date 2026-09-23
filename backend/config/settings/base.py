@@ -1,5 +1,6 @@
 """Django settings de base — communes à tous les environnements."""
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -205,6 +206,17 @@ SOCIALACCOUNT_PROVIDERS = {
 # ---------------------------------------------------------------------------
 # DRF
 # ---------------------------------------------------------------------------
+SIMPLE_JWT = {
+    # Le token d'accès doit couvrir la durée des échanges avec les modèles
+    # (raisonnement + appels d'outils), sinon l'utilisateur est déconnecté au
+    # premier clic après une réponse. Le frontend renouvelle le token à la
+    # volée via `/api/auth/refresh/` quand il expire.
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "UPDATE_LAST_LOGIN": True,
+}
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",

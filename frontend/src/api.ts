@@ -52,6 +52,17 @@ export interface OllamaModel {
   size: number;
 }
 
+export interface CatalogModel {
+  id: string;
+  name: string;
+  quantization: string;
+  license: string;
+  ram_min_gb: number;
+  model_type: "general" | "coding";
+  ollama_tag: string;
+  installed: boolean;
+}
+
 export interface PermissionRequest {
   id: string;
   call_id: string;
@@ -96,7 +107,14 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`/api${path}`, { ...opts, headers });
+  let res = await fetch(`/api${path}`, { ...opts, headers });
+  if (res.status === 401 && !path.startsWith("/auth/")) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      headers["Authorization"] = `Bearer ${getToken()}`;
+      res = await fetch(`/api${path}`, { ...opts, headers });
+    }
+  }
   if (res.status === 401) {
     clearTokens();
     window.location.href = "/login";
@@ -115,6 +133,25 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+async function tryRefresh(): Promise<boolean> {
+  const refresh = localStorage.getItem(REFRESH_KEY);
+  if (!refresh) return false;
+  try {
+    const r = await fetch("/api/auth/refresh/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    if (data.access) localStorage.setItem(TOKEN_KEY, data.access);
+    if (data.refresh) localStorage.setItem(REFRESH_KEY, data.refresh);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function drfError(body: any): string | null {
@@ -228,6 +265,8 @@ export const api = {
     }>(`/ollama/pulls/${taskId}/`),
   deleteModel: (name: string) =>
     request<{ deleted: string }>(`/ollama/models/${name}/`, { method: "DELETE" }),
+  ollamaCatalog: () =>
+    request<{ catalog: CatalogModel[]; total: number }>("/ollama/catalog/"),
 
   adminUsers: async () =>
     listResult<AdminUser>(await request("/auth/admin/users/")),

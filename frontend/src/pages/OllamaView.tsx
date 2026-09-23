@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, RefreshCw, Trash2 } from "lucide-react";
-import { api, type OllamaModel } from "../api";
+import { api, type CatalogModel, type OllamaModel } from "../api";
 
 interface PullState {
   task_id: string;
@@ -36,6 +36,8 @@ const MESSAGE_LABELS: Record<string, string> = {
 
 export default function OllamaView() {
   const [models, setModels] = useState<OllamaModel[]>([]);
+  const [catalog, setCatalog] = useState<CatalogModel[]>([]);
+  const [catalogFilter, setCatalogFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [pullName, setPullName] = useState("");
   const [pulls, setPulls] = useState<PullState[]>([]);
@@ -51,9 +53,19 @@ export default function OllamaView() {
     }
   }, []);
 
+  const loadCatalog = useCallback(async () => {
+    try {
+      const r = await api.ollamaCatalog();
+      setCatalog(r.catalog);
+    } catch {
+      /* Ollama injoignable : catalogue vide */
+    }
+  }, []);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadCatalog();
+  }, [load, loadCatalog]);
 
   useEffect(() => {
     if (pulls.some((p) => p.status === "pulling")) {
@@ -71,23 +83,26 @@ export default function OllamaView() {
   async function pollAll() {
     const active = pulls.filter((p) => p.status === "pulling");
     if (!active.length) return;
+    let finished = false;
     const updated = await Promise.all(
       active.map(async (p) => {
         try {
           const s = await api.pullStatus(p.task_id);
-          if (s.status !== "pulling") await load();
+          if (s.status !== "pulling") finished = true;
           return s;
         } catch {
           return p;
         }
       }),
     );
+    if (finished) {
+      await Promise.all([load(), loadCatalog()]);
+    }
     setPulls((prev) => prev.map((p) => updated.find((u) => u.task_id === p.task_id) ?? p));
   }
 
-  async function startPull() {
-    const name = pullName.trim();
-    if (!name) return;
+  async function startPull(name: string) {
+    if (!name.trim()) return;
     try {
       const res = await api.pullModel(name);
       const taskId = res.task_id;
@@ -97,18 +112,18 @@ export default function OllamaView() {
           { task_id: taskId, model: name, status: "pulling", message: "initialisation", percent: 0, completed: 0, total: 0 },
         ]);
       } else {
-        await load();
+        await Promise.all([load(), loadCatalog()]);
       }
-      setPullName("");
     } catch (e: any) {
       alert(e.message || "Échec du pull");
     }
+    setPullName("");
   }
 
   async function remove(name: string) {
     if (!confirm(`Supprimer le modèle ${name} ?`)) return;
     await api.deleteModel(name);
-    await load();
+    await Promise.all([load(), loadCatalog()]);
   }
 
   return (
@@ -125,11 +140,11 @@ export default function OllamaView() {
           className="pull-input"
           value={pullName}
           onChange={(e) => setPullName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && startPull()}
+          onKeyDown={(e) => e.key === "Enter" && startPull(pullName)}
           placeholder="Nom du modèle (ex: qwen2.5-coder:7b)"
           style={{ flex: 1 }}
         />
-        <button className="btn" onClick={startPull} disabled={!pullName.trim()}>
+        <button className="btn" onClick={() => startPull(pullName)} disabled={!pullName.trim()}>
           <Download size={15} /> Pull
         </button>
       </div>
@@ -170,6 +185,116 @@ export default function OllamaView() {
           </div>
         ))}
       </div>
+
+      <CatalogSection
+        catalog={catalog}
+        pulls={pulls}
+        filter={catalogFilter}
+        onFilterChange={setCatalogFilter}
+        onPull={startPull}
+      />
+    </div>
+  );
+}
+
+function CatalogSection({
+  catalog,
+  pulls,
+  filter,
+  onFilterChange,
+  onPull,
+}: {
+  catalog: CatalogModel[];
+  pulls: PullState[];
+  filter: string;
+  onFilterChange: (v: string) => void;
+  onPull: (name: string) => void;
+}) {
+  const lower = filter.trim().toLowerCase();
+  const filtered = useMemo(
+    () =>
+      lower
+        ? catalog.filter(
+            (m) =>
+              m.name.toLowerCase().includes(lower) ||
+              m.ollama_tag.toLowerCase().includes(lower) ||
+              m.license.toLowerCase().includes(lower),
+          )
+        : catalog,
+    [catalog, lower],
+  );
+  const installed = filtered.filter((m) => m.installed);
+  const available = filtered.filter((m) => !m.installed);
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <h3 style={{ margin: 0, fontSize: 15 }}>Catalogue</h3>
+        <span className="sub">
+          {available.length + installed.length} / {catalog.length} modèles recommandés
+        </span>
+        <input
+          className="pull-input"
+          value={filter}
+          onChange={(e) => onFilterChange(e.target.value)}
+          placeholder="Filtrer le catalogue…"
+          style={{ marginLeft: "auto", width: 220 }}
+        />
+      </div>
+
+      <CatalogList items={installed} pulls={pulls} onPull={onPull} title="Modèles installés" empty="Aucun modèle du catalogue installé." />
+      <CatalogList items={available} pulls={pulls} onPull={onPull} title="Autres modèles disponibles" empty="Aucun autre modèle à afficher." />
+    </div>
+  );
+}
+
+function CatalogList({
+  items,
+  pulls,
+  onPull,
+  title,
+  empty,
+}: {
+  items: CatalogModel[];
+  pulls: PullState[];
+  onPull: (name: string) => void;
+  title: string;
+  empty: string;
+}) {
+  const pullingTag = (tag: string) => pulls.some((p) => p.model.trim() === tag && p.status === "pulling");
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div className="panel-title" style={{ fontSize: 12, textTransform: "none", marginBottom: 6 }}>
+        {title} ({items.length})
+      </div>
+      {items.length === 0 && <div className="sub">{empty}</div>}
+      {items.map((m) => (
+        <div key={m.id} className="list-row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="name" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{m.name}</div>
+            <div className="sub mono" style={{ fontSize: 11.5 }}>
+              <code>{m.ollama_tag}</code>
+              <span style={{ margin: "0 6px" }}>·</span>
+              {m.model_type === "coding" ? "Code" : "Général"}
+              <span style={{ margin: "0 6px" }}>·</span>
+              Q{m.quantization}
+              <span style={{ margin: "0 6px" }}>·</span>
+              RAM min {m.ram_min_gb} Go
+              <span style={{ margin: "0 6px" }}>·</span>
+              {m.license}
+            </div>
+          </div>
+          {m.installed ? (
+            <button className="btn ghost sm" onClick={() => onPull(m.ollama_tag)} disabled={false} title="Re-pull">
+              <RefreshCw size={13} /> Pull
+            </button>
+          ) : (
+            <button className="btn sm" onClick={() => onPull(m.ollama_tag)} disabled={pullingTag(m.ollama_tag)}>
+              <Download size={13} /> {pullingTag(m.ollama_tag) ? "En cours…" : "Installer"}
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
