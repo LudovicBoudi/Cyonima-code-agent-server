@@ -22,21 +22,22 @@ class MessageSerializer(serializers.ModelSerializer):
 
 class SessionSerializer(serializers.ModelSerializer):
     workspace_name = serializers.CharField(source="workspace.name", read_only=True)
+    local_path = serializers.CharField(source="workspace.local_path", read_only=True)
 
     class Meta:
         model = Session
         fields = [
             "id",
-            "workspace",
-            "workspace_name",
             "title",
+            "local_path",
+            "workspace_name",
             "model",
             "reasoning",
             "provider",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "workspace_name", "created_at", "updated_at"]
+        read_only_fields = ["id", "local_path", "workspace_name", "created_at", "updated_at"]
 
 
 class PermissionRequestSerializer(serializers.ModelSerializer):

@@ -191,6 +191,15 @@ button {
   white-space: nowrap;
   flex: 1;
 }
+.sidebar select {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-fg);
+  border-radius: 6px;
+  padding: 3px 5px;
+  font-size: 11px;
+  max-width: 105px;
+}
 .main {
   flex: 1;
   display: flex;

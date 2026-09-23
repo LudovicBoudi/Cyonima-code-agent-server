@@ -40,6 +40,8 @@ export default function SessionView({ session }: { session: Session }) {
   const [perms, setPerms] = useState<PermissionRequest[]>([]);
   const [usage, setUsage] = useState<Record<string, number> | null>(null);
   const [files, setFiles] = useState<{ status: string; path: string }[]>([]);
+  const workspaceName = session.workspace_name || session.title || "Workspace";
+  const localPath = session.local_path || "";
 
   const wsRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -305,8 +307,17 @@ export default function SessionView({ session }: { session: Session }) {
       </div>
 
       <div className="col-files">
-        <div className="panel-title">Fichiers modifiés</div>
+        <div className="panel-title">Fichiers</div>
         <div className="panel-body">
+          <div style={{ color: "var(--color-muted)", fontSize: 12.5, marginBottom: 8 }}>
+            Workspace : <b>{workspaceName}</b>
+            {localPath && (
+              <>
+                <br />
+                <code className="mono">{localPath}</code>
+              </>
+            )}
+          </div>
           {files.length === 0 ? (
             <div style={{ color: "var(--color-muted)" }}>Aucun fichier modifié.</div>
           ) : (

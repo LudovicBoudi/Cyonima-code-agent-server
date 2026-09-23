@@ -1,15 +1,67 @@
 import pytest
 
 from apps.sessions.models import Message, Session
+from apps.workspaces.models import Workspace
 
 
 @pytest.mark.django_db
-def test_create_session(auth_client, workspace):
+def test_create_session_with_name_and_local_path(auth_client, user, tmp_path, settings):
+    settings.WORKSPACE_LOCAL_ROOTS = [str(tmp_path)]
+    local_path = tmp_path / "mon-projet"
+    local_path.mkdir()
+
     r = auth_client.post(
-        "/api/sessions/", {"workspace": str(workspace.id)}, format="json"
+        "/api/sessions/",
+        {"name": "Mon projet", "local_path": str(local_path)},
+        format="json",
     )
     assert r.status_code == 201
-    assert str(r.data["workspace"]) == str(workspace.id)
+    assert r.data["title"] == "Mon projet"
+    assert r.data["local_path"] == str(local_path.resolve())
+    session = Session.objects.get(id=r.data["id"])
+    assert session.user == user
+    assert session.workspace.local_path == str(local_path.resolve())
+    assert session.workspace.status == Workspace.Status.READY
+
+
+@pytest.mark.django_db
+def test_create_session_requires_name_and_path(auth_client, tmp_path, settings):
+    settings.WORKSPACE_LOCAL_ROOTS = [str(tmp_path)]
+    r = auth_client.post("/api/sessions/", {"name": ""}, format="json")
+    assert r.status_code == 400
+
+
+@pytest.mark.django_db
+def test_create_session_rejects_path_outside_roots(auth_client, tmp_path, settings):
+    settings.WORKSPACE_LOCAL_ROOTS = [str(tmp_path / "autorise")]
+    outside = tmp_path / "hors-racines"
+    outside.mkdir()
+    r = auth_client.post(
+        "/api/sessions/",
+        {"name": "X", "local_path": str(outside)},
+        format="json",
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.django_db
+def test_session_serializer_exposes_local_path(auth_client, session, tmp_path, settings):
+    settings.WORKSPACE_LOCAL_ROOTS = [str(tmp_path)]
+    session.workspace.local_path = str(tmp_path)
+    session.workspace.save()
+    r = auth_client.get(f"/api/sessions/{session.id}/")
+    assert r.status_code == 200
+    assert r.data["local_path"] == str(tmp_path)
+
+
+@pytest.mark.django_db
+def test_local_dirs_endpoint(auth_client, tmp_path, settings):
+    settings.WORKSPACE_LOCAL_ROOTS = [str(tmp_path)]
+    (tmp_path / "dossier-a").mkdir()
+    r = auth_client.get("/api/sessions/local_dirs/", {"path": str(tmp_path)})
+    assert r.status_code == 200
+    names = [entry["name"] for entry in r.data["dirs"]]
+    assert "dossier-a" in names
 
 
 @pytest.mark.django_db

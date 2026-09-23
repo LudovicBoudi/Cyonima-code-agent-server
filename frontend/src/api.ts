@@ -29,6 +29,7 @@ export interface Session {
   title: string;
   model: string;
   reasoning: string;
+  local_path?: string;
 }
 
 export interface Message {
@@ -162,13 +163,6 @@ export const api = {
 
   workspaces: async (orgId: string) =>
     listResult<Workspace>(await request(`/orgs/${orgId}/workspaces/`)),
-  localDirs: (orgId: string, path?: string) =>
-    request<{
-      path: string;
-      parent: string | null;
-      roots: string[];
-      dirs: { name: string; path: string }[];
-    }>(`/orgs/${orgId}/workspaces/local_dirs/${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   createWorkspace: (
     orgId: string,
     name: string,
@@ -186,14 +180,22 @@ export const api = {
       }),
     }),
 
-  sessions: async (workspaceId?: string) =>
-    listResult<Session>(
-      await request(`/sessions/${workspaceId ? `?workspace=${workspaceId}` : ""}`),
-    ),
-  createSession: (workspaceId: string, model?: string) =>
+  sessions: async () => listResult<Session>(await request("/sessions/")),
+  localDirs: (path?: string) =>
+    request<{
+      path: string;
+      parent: string | null;
+      roots: string[];
+      dirs: { name: string; path: string }[];
+    }>(`/sessions/local_dirs/${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+  createSession: (name: string, localPath: string, model?: string) =>
     request<Session>("/sessions/", {
       method: "POST",
-      body: JSON.stringify({ workspace: workspaceId, model: model || "" }),
+      body: JSON.stringify({
+        name,
+        local_path: localPath,
+        model: model || "",
+      }),
     }),
   deleteSession: (id: string) =>
     request<void>(`/sessions/${id}/`, { method: "DELETE" }),

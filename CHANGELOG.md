@@ -4,6 +4,18 @@ Toutes les évolutions notables de Cyonima Code Agent Server sont consignées ic
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le
 versionnage [SemVer](https://semver.org/lang/fr/).
 
+## [Unreleased]
+
+### Modifié
+
+- **Création de session à la manière de l'app desktop** : plus d'organisations
+  ou workspaces dans l'interface. L'utilisateur se connecte, crée une session en
+  donnant un **nom de projet** et en choisissant un **dossier de travail local**
+  (navigation serveur bornée par `WORKSPACE_LOCAL_ROOTS`). Une organisation
+  personnelle et un workspace sont créés automatiquement en arrière-plan ; le
+  workspace pointe sur le dossier sélectionné. L'approche « runner local » a été
+  abandonnée (le compagnon `runner/` et les éléments associés ont été retirés).
+
 ## [0.1.0] — 2026-09-22
 
 Première version : portage serveur multi-tenant de

@@ -6,7 +6,7 @@ from apps.workspaces.models import Workspace
 
 
 class Session(BaseModel):
-    """Session d'agent : une conversation isolée sur un workspace."""
+    """Session d'agent : une conversation isolée sur un répertoire de travail."""
 
     class Provider(models.TextChoices):
         OLLAMA = "ollama", "Ollama"

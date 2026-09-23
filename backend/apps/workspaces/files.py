@@ -85,6 +85,28 @@ def is_within_roots(path, roots):
     )
 
 
+def resolve_local_path(path):
+    """Résout un chemin local autorisé (WORKSPACE_LOCAL_ROOTS). Lève PermissionError/NotADirectoryError."""
+    import os
+
+    from django.conf import settings as s
+
+    roots = [
+        os.path.realpath(os.path.expanduser(r))
+        for r in s.WORKSPACE_LOCAL_ROOTS
+        if r.strip()
+    ]
+    if not roots:
+        raise PermissionError("Choix d'un dossier local désactivé (WORKSPACE_LOCAL_ROOTS vide).")
+
+    full = os.path.realpath(os.path.expanduser(path or ""))
+    if not os.path.isdir(full):
+        raise NotADirectoryError(f"Le dossier local n'existe pas: {path}")
+    if not is_within_roots(full, roots):
+        raise PermissionError(f"Chemin hors des racines autorisées: {path}")
+    return full
+
+
 def list_local_dirs(path=""):
     """Liste les sous-dossiers d'un répertoire serveur autorisé (WORKSPACE_LOCAL_ROOTS).
 
