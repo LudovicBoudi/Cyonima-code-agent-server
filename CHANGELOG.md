@@ -12,9 +12,26 @@ versionnage [SemVer](https://semver.org/lang/fr/).
   de modèles recommandés que le client lourd (`qwen3`, `ornith-1.5`, `gemma4`,
   `granite4.2`…), avec filtrage, statut installé et bouton d'installation via
   `ollama pull` (`GET /api/ollama/catalog/`).
+- **Administration (nouvel onglet « Paramètres »)** : configuration serveur
+  depuis l'UI, pour les utilisateurs staff.
+  - **HTTPS** : redirection HTTP→HTTPS, en-tête HSTS et cookies `Secure`
+    appliqués à chaud via un middleware piloté par la base (`SystemConfig`).
+    Génération d'un **certificat auto-signé** (RSA 2048) et d'un site **nginx**
+    prêt à monter, écrits dans `backend/data/tls/`. Inactif sur `localhost` en
+    dev pour ne pas casser le développement.
+  - **LDAP / Active Directory** : boîte de configuration (URI, DN de liaison,
+    base, filtre, StartTLS…) avec **test de connexion** avant sauvegarde.
+    Backend d'authentification `LdapBackend` (via `ldap3`) : bind service →
+    recherche → vérification du mot de passe de l'utilisateur. Le compte local
+    est créé automatiquement à la première connexion (login par email) ; le mot
+    de passe utilisateur n'est **jamais** stocké.
 
 ### Modifié
 
+- **Procédure d'installation documentée** : nouveau guide détaillé
+  `docs/INSTALL.md` (prérequis, `.env`, dev SQLite sans Docker, dev Docker,
+  sandbox, HTTPS/LDAP depuis l'admin, production, dépannage) ; le README
+  renvoie vers ce guide et schématise le démarrage rapide.
 - **Session d'authentification plus longue** : le JWT d'accès passe de 5 min à
   12 h, le refresh à 7 jours avec rotation automatique. Le frontend renouvelle
   le token à la volée via `/api/auth/refresh/` lorsqu'une requête retourne 401,

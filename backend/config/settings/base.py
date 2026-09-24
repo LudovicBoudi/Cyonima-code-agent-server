@@ -82,6 +82,7 @@ LOCAL_APPS = [
     "apps.sessions",
     "apps.ollama",
     "apps.agents",
+    "apps.system",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -89,6 +90,7 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "apps.system.middleware.HttpsConfigMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -157,6 +159,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # django-allauth
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
+    "apps.system.auth.LdapBackend",
     "allauth.account.auth_backends.AuthenticationBackend",
 ]
 

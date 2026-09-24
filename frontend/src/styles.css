@@ -8,6 +8,8 @@
   --color-surface-2: #251639;
   --color-danger: #f87171;
   --color-ok: #4ade80;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
 }
 
 * {
@@ -581,6 +583,29 @@ button {
 }
 .admin-grid .btn {
   align-self: end;
+}
+.admin-grid select {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-fg);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+}
+.admin-grid select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+.label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-muted);
+  margin: 12px 0 4px;
+}
+.tab-active {
+  background: var(--color-accent);
+  color: #fff !important;
+  border-color: var(--color-accent) !important;
 }
 .danger-ghost {
   color: var(--color-danger);

@@ -84,6 +84,32 @@ export interface AdminUser {
   last_login?: string | null;
 }
 
+export type LdapType = "ad" | "openldap";
+
+export interface SystemConfig {
+  https_enabled: boolean;
+  https_domain: string;
+  has_tls_cert: boolean;
+  is_https_ready: boolean;
+  ldap_enabled: boolean;
+  ldap_type: LdapType;
+  ldap_server_uri: string;
+  ldap_bind_dn: string;
+  ldap_bind_password?: string;
+  ldap_base_dn: string;
+  ldap_login_attribute: string;
+  ldap_user_filter: string;
+  ldap_email_domain: string;
+  ldap_start_tls: boolean;
+  ldap_user_attr: string;
+  messages?: string[];
+}
+
+export interface LdapTestResult {
+  ok: boolean;
+  message: string;
+}
+
 const TOKEN_KEY = "cyonima.token";
 const REFRESH_KEY = "cyonima.refresh";
 
@@ -288,6 +314,23 @@ export const api = {
     }),
   adminDeleteUser: (id: string) =>
     request<void>(`/auth/admin/users/${id}/`, { method: "DELETE" }),
+
+  adminConfig: () => request<SystemConfig>("/system/config/"),
+  adminSaveConfig: (data: Partial<SystemConfig>) =>
+    request<SystemConfig & { messages: string[] }>("/system/config/", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  adminGenerateCert: (domain: string) =>
+    request<{ ok: boolean; message: string; messages: string[]; config: SystemConfig }>(
+      "/system/config/generate-cert/",
+      { method: "POST", body: JSON.stringify({ domain }) },
+    ),
+  adminTestLdap: (data: Partial<SystemConfig>) =>
+    request<LdapTestResult>("/system/config/test-ldap/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export function wsUrl(sessionId: string): string {

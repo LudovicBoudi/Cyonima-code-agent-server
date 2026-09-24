@@ -19,11 +19,15 @@ Portail web **multiuser** d'agent IA de code, reprenant le concept de
 ## Stack
 
 - **Backend** : Django 5.2 + DRF + Channels (WebSocket streaming) + Celery/Redis
-- **Auth** : django-allauth (OIDC/SAML) + SimpleJWT
+- **Auth** : django-allauth (OIDC/SAML/LDAP) + SimpleJWT
 - **Inférence** : Ollama (HTTP partagé)
 - **Sandbox** : Docker, un conteneur par workspace
 - **Frontend** : React + Vite + TypeScript (UI violette reprise de l'app desktop)
 - **Base de données** : PostgreSQL
+
+> Guide d'installation complet et configuré : **[`docs/INSTALL.md`](docs/INSTALL.md)**
+> (dev SQLite sans Docker, dev Docker, production, HTTPS/LDAP via l'admin,
+> dépannage).
 
 ## Structure
 
@@ -37,8 +41,10 @@ backend/            Application Django
     sessions/       Sessions d'agent + messages + WebSocket
     ollama/         Client Ollama (list/pull/delete/show)
     agents/         Boucle agent, outils, permissions, prompt
+    system/         Paramètres serveur (HTTPS, LDAP) configurables via l'admin
 frontend/           SPA React (voir frontend/README.md)
 sandbox/            Image Docker du sandbox d'exécution
+docs/               Architecture et installation
 ```
 
 ## Fonctionnalités
@@ -55,31 +61,71 @@ sandbox/            Image Docker du sandbox d'exécution
   accès hors roots (ex. `/tmp`) soumis à approbation, `bash` systématiquement
   contrôlé.
 - **Bouton arrêter** la génération en cours.
+- **Administration (staff)** : gestion des utilisateurs **et paramètres
+  serveur** — activation d'**HTTPS** (redirection HTTP→HTTPS, HSTS, cookies
+  `Secure`, génération d'un certificat auto-signé + template nginx) et
+  authentification **LDAP / Active Directory** (test de connexion intégré,
+  compte local créé automatiquement, mot de passe jamais stocké).
 
-## Démarrage rapide (dev)
+## Installation (dev en 5 minutes)
 
-> En développement, aucun service externe n'est requis : le channel layer et le
-> broker sont en mémoire par défaut (`USE_IN_MEMORY_CHANNEL`, réactivable avec
-> `USE_IN_MEMORY_CHANNEL=0`), et on peut utiliser SQLite avec `USE_SQLITE=true`.
+> Procédure complète (prérequis, `.env`, sandbox, HTTPS, LDAP, production,
+> dépannage) : **[`docs/INSTALL.md`](docs/INSTALL.md)**.
+
+### Prérequis
+
+Python 3.12+, Node 18+, npm 9+, Docker (Compose v2), et un **Ollama** partagé
+(optionnel pour découvrir l'app).
+
+### 1. Configuration
 
 ```bash
-# 1. Backend
+cp .env.example .env
+# Dev rapide sans Postgres/Redis :
+#   USE_SQLITE=true
+#   USE_IN_MEMORY_CHANNEL=true
+```
+
+### 2. Services partagés (optionnel — sautable avec SQLite/mémoire)
+
+```bash
+docker compose up -d db redis ollama    # ou : make up
+```
+
+### 3. Backend
+
+```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements-dev.txt
 cd backend
 python manage.py migrate
-python manage.py createsuperuser
+python manage.py createsuperuser        # compte admin (gestion des utilisateurs)
 daphne -b 0.0.0.0 -p 8080 config.asgi:application   # API + WS sur :8080
+```
 
-# 2. Frontend (dans un autre terminal)
-cd frontend && npm install && npm run dev            # SPA sur :5173
+### 4. Frontend
 
-# 3. Ollama (optionnel, pour les pulls de modèles)
+```bash
+cd frontend && npm install
+BACKEND_URL=http://localhost:8080 npm run dev    # SPA sur :5173
+```
+
+> `BACKEND_URL` pointe le backend proxifié par Vite (défaut `:8000` ; ici
+> daphne sur `:8080`).
+
+### 5. Ollama (optionnel)
+
+```bash
 docker run -d -p 11434:11434 ollama/ollama:latest
 ```
 
 L'application se visite sur **http://localhost:5173/** (Vite proxifie `/api`,
-`/ws` et `/admin` vers le backend). Le port **8080** expose uniquement l'API.
+`/ws` et `/admin` vers le backend). Le port **8080** expose uniquement l'API —
+un `Page not found` sur `:8080/` est **normal**, la SPA se sert sur `:5173`.
+
+Recommandé ensuite : construire le sandbox d'exécution
+(`make sandbox-build && make sandbox-prep`) pour débloquer les commandes
+`bash` de l'agent.
 
 ### Workers Celery
 
@@ -107,6 +153,9 @@ synchrone — pratique en dev.
 - `GET  /api/ollama/catalog/` → **catalogue** de modèles recommandés (même
   sélection que l'app desktop : qwen3, ornith-1.5, gemma4, granite4.2…), avec
   statut *installé* et pull direct via `POST /api/ollama/models/{tag}/pull/`
+- `GET/PATCH /api/system/config/` → **paramètres serveur** (staff) : HTTPS et
+  LDAP ; actions `POST /api/system/config/generate-cert/` (certificat
+  auto-signé) et `POST /api/system/config/test-ldap/` (test de connexion)
 
 ## Déploiement multi-workers
 

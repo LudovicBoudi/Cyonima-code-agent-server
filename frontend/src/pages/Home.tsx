@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
-import { Bot, LogOut, Plus, MessageSquare, Boxes, ShieldCheck, FolderGit2, FolderUp, FolderOpen } from "lucide-react";
+import { Bot, LogOut, Plus, MessageSquare, Boxes, ShieldCheck, Settings, Users, FolderGit2, FolderUp, FolderOpen } from "lucide-react";
 import { api, type Session } from "../api";
 import { useAuth } from "../store/auth";
 import SessionView from "./SessionView";
 import OllamaView from "./OllamaView";
 import AdminUsers from "./AdminUsers";
+import AdminSettings from "./AdminSettings";
 
 export default function Home() {
   const { user, logout } = useAuth();
-  const [view, setView] = useState<"main" | "ollama" | "admin">("main");
+  const [view, setView] = useState<"main" | "ollama" | "users" | "settings">("main");
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [showSessionModal, setShowSessionModal] = useState(false);
@@ -49,8 +50,8 @@ export default function Home() {
 
           {user?.is_staff && (
             <div
-              className={`item ${view === "admin" ? "active" : ""}`}
-              onClick={() => setView("admin")}
+              className={`item ${view === "users" || view === "settings" ? "active" : ""}`}
+              onClick={() => setView("users")}
             >
               <ShieldCheck size={15} />
               <span className="truncate">Administration</span>
@@ -102,8 +103,24 @@ export default function Home() {
       <main className="main">
         {view === "ollama" ? (
           <OllamaView />
-        ) : view === "admin" ? (
-          <AdminUsers />
+        ) : view === "users" || view === "settings" ? (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14, flexShrink: 0 }}>
+              <button
+                className={`btn ghost sm ${view === "users" ? "tab-active" : ""}`}
+                onClick={() => setView("users")}
+              >
+                <Users size={13} /> Utilisateurs
+              </button>
+              <button
+                className={`btn ghost sm ${view === "settings" ? "tab-active" : ""}`}
+                onClick={() => setView("settings")}
+              >
+                <Settings size={13} /> Paramètres
+              </button>
+            </div>
+            {view === "users" ? <AdminUsers /> : <AdminSettings />}
+          </div>
         ) : activeSession ? (
           <SessionView session={activeSession} />
         ) : (
